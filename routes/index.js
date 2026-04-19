@@ -16,5 +16,7 @@ router.use("/brands", require("./brands"));
 router.use("/models", require("./models"));
 router.use("/cart", require("./cart"));
 router.use("/orders", require("./order"));
+router.use("/momo", require("./momo"));
+router.use("/payment", require("./payment"));
 
 module.exports = router;

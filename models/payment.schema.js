@@ -7,7 +7,7 @@ const paymentSchema = new Schema({
   method: { type: String, enum: ["cod", "momo"], required: true },
   status: {
     type: String,
-    enum: ["pending", "paid", "failed"],
+    enum: ["pending", "pending-payment", "paid", "failed"],
     default: "pending",
   },
   transaction_id: { type: String },

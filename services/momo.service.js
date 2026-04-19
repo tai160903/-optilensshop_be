@@ -1,3 +1,75 @@
+// Xác thực phản hồi trả về từ MoMo (chữ ký + trạng thái)
+exports.verifyMomoReturn = (query) => {
+  if (!query) {
+    throw new Error("Missing momo query parameters");
+  }
+
+  console.log(query);
+
+  const {
+    partnerCode,
+    orderId,
+    requestId,
+    amount,
+    orderInfo,
+    orderType,
+    transId,
+    resultCode,
+    message,
+    payType,
+    responseTime,
+    extraData,
+    signature,
+  } = query;
+
+  const secretKey =
+    process.env.MOMO_SECRET_KEY || "K951B6PE1waDMi640xX08PD3vg6EkVlz";
+
+  const rawSignature =
+    "accessKey=" +
+    (process.env.MOMO_ACCESS_KEY || "F8BBA842ECF85") +
+    "&amount=" +
+    amount +
+    "&extraData=" +
+    extraData +
+    "&message=" +
+    message +
+    "&orderId=" +
+    orderId +
+    "&orderInfo=" +
+    orderInfo +
+    "&orderType=" +
+    orderType +
+    "&partnerCode=" +
+    partnerCode +
+    "&payType=" +
+    payType +
+    "&requestId=" +
+    requestId +
+    "&responseTime=" +
+    responseTime +
+    "&resultCode=" +
+    resultCode +
+    "&transId=" +
+    transId;
+
+  const signCheck = require("crypto")
+    .createHmac("sha256", secretKey)
+    .update(rawSignature)
+    .digest("hex");
+
+  const isSignatureValid = signCheck === signature;
+  const isSuccess = isSignatureValid && resultCode === "0";
+
+  return {
+    isSuccess,
+    message: isSuccess
+      ? "Payment successful"
+      : isSignatureValid
+        ? "Payment failed"
+        : "Invalid signature",
+  };
+};
 const crypto = require("crypto");
 const https = require("https");
 
