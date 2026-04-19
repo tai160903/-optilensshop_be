@@ -61,7 +61,9 @@ exports.createOrderFromCart = async (userId, orderData) => {
         (i) => i.combo_id && i.combo_id.toString() === sel.combo_id,
       );
       if (!found) {
-        throw new Error("Item combo trong cart không hợp lệ hoặc thiếu số lượng");
+        throw new Error(
+          "Item combo trong cart không hợp lệ hoặc thiếu số lượng",
+        );
       }
       const orderQty =
         sel.quantity !== undefined
@@ -181,7 +183,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
     order_id: order._id,
     amount: total,
     method: orderData.payment_method,
-    status: orderData.payment_method === "cod" ? "pending" : "pending",
+    status: orderData.payment_method === "cod" ? "pending" : "pending-payment",
   }).save();
   cart.items = cart.items.reduce((arr, i) => {
     const plain = i.toObject ? i.toObject() : { ...i };
@@ -204,7 +206,9 @@ exports.createOrderFromCart = async (userId, orderData) => {
       return arr;
     }
     const requestedQty =
-      sel.quantity !== undefined ? Number(sel.quantity) : Number(plain.quantity);
+      sel.quantity !== undefined
+        ? Number(sel.quantity)
+        : Number(plain.quantity);
     const remain = Number(plain.quantity) - requestedQty;
     if (remain > 0) {
       arr.push({
@@ -226,9 +230,14 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
   if (!order) throw new Error("Không tìm thấy đơn hàng");
 
   if (
-    ["processing", "manufacturing", "packed", "shipped", "delivered"].includes(
-      newStatus,
-    ) &&
+    [
+      "processing",
+      "manufacturing",
+      "packed",
+      "shipped",
+      "delivered",
+      "returned",
+    ].includes(newStatus) &&
     userRole !== "operations"
   ) {
     throw new Error("Chỉ operator được cập nhật trạng thái này");
@@ -238,7 +247,6 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
   order.status = newStatus;
   await order.save();
 
-  // Nếu giao thành công thì trừ stock_quantity trong ProductVariant
   if (newStatus === "delivered") {
     const ProductVariant = require("../models/productVariant.schema");
     const items = await OrderItem.find({ order_id: orderId });
@@ -247,6 +255,30 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
         { _id: item.variant_id },
         { $inc: { stock_quantity: -item.quantity } },
       );
+    }
+    const payment = await Payment.findOne({ order_id: orderId, method: "cod" });
+    if (payment && payment.status !== "paid") {
+      payment.status = "paid";
+      payment.paid_at = new Date();
+      await payment.save();
+    }
+  }
+  // Nếu khách không nhận, chuyển trạng thái returned
+  if (newStatus === "returned") {
+    const ProductVariant = require("../models/productVariant.schema");
+    const items = await OrderItem.find({ order_id: orderId });
+    // Cộng lại stock
+    for (const item of items) {
+      await ProductVariant.updateOne(
+        { _id: item.variant_id },
+        { $inc: { stock_quantity: item.quantity } },
+      );
+    }
+    // Cập nhật payment COD về failed
+    const payment = await Payment.findOne({ order_id: orderId, method: "cod" });
+    if (payment && payment.status !== "failed") {
+      payment.status = "failed";
+      await payment.save();
     }
   }
   return order;
@@ -271,4 +303,95 @@ exports.confirmOrder = async (orderId, user) => {
   order.status = "confirmed";
   await order.save();
   return order;
+};
+
+exports.getOrderListCustomer = async (userId, filter = {}) => {
+  const match = { user_id: userId };
+  if (filter.status) match.status = filter.status;
+  const page = filter.page ? parseInt(filter.page) : 1;
+  const pageSize = filter.pageSize ? parseInt(filter.pageSize) : 10;
+  const skip = (page - 1) * pageSize;
+  const total = await Order.countDocuments(match);
+  const orders = await Order.find(match)
+    .sort({ created_at: -1 })
+    .skip(skip)
+    .limit(pageSize);
+  const orderIds = orders.map((o) => o._id);
+  let paymentQuery = { order_id: { $in: orderIds } };
+  if (filter.payment_method) paymentQuery.method = filter.payment_method;
+  if (filter.payment_status) paymentQuery.status = filter.payment_status;
+  const payments = await Payment.find(paymentQuery);
+  const paymentMap = {};
+  payments.forEach((p) => {
+    if (p.status !== "pending-payment") {
+      paymentMap[p.order_id] = p;
+    }
+  });
+  const filteredOrders = orders.filter(
+    (o) =>
+      !paymentMap[o._id] ||
+      (paymentMap[o._id] && paymentMap[o._id].status !== "pending-payment"),
+  );
+  return {
+    data: filteredOrders.map((o) => ({
+      ...o.toObject(),
+      payment: paymentMap[o._id] || null,
+    })),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+};
+
+exports.getOrderListShop = async (filter = {}) => {
+  const match = {};
+  if (filter.status) match.status = filter.status;
+  const page = filter.page ? parseInt(filter.page) : 1;
+  const pageSize = filter.pageSize ? parseInt(filter.pageSize) : 10;
+  const skip = (page - 1) * pageSize;
+  const total = await Order.countDocuments(match);
+  const orders = await Order.find(match)
+    .sort({ created_at: -1 })
+    .skip(skip)
+    .limit(pageSize);
+  const orderIds = orders.map((o) => o._id);
+  let paymentQuery = { order_id: { $in: orderIds } };
+  if (filter.payment_method) paymentQuery.method = filter.payment_method;
+  if (filter.payment_status) paymentQuery.status = filter.payment_status;
+  const payments = await Payment.find(paymentQuery);
+  const paymentMap = {};
+  payments.forEach((p) => {
+    paymentMap[p.order_id] = p;
+  });
+  let filteredOrders = orders;
+  if (filter.payment_method || filter.payment_status) {
+    filteredOrders = orders.filter((o) => paymentMap[o._id]);
+  }
+  return {
+    data: filteredOrders.map((o) => ({
+      ...o.toObject(),
+      payment: paymentMap[o._id] || null,
+    })),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+};
+
+exports.getOrderDetail = async (orderId) => {
+  const order = await Order.findById(orderId);
+  if (!order) throw new Error("Không tìm thấy đơn hàng");
+  const items = await OrderItem.find({ order_id: orderId });
+  const payment = await Payment.findOne({ order_id: orderId });
+  return {
+    ...order.toObject(),
+    items,
+    payment,
+  };
 };

@@ -1,3 +1,37 @@
+exports.getOrderListCustomer = async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.page) filter.page = req.query.page;
+    if (req.query.pageSize) filter.pageSize = req.query.pageSize;
+    const result = await orderService.getOrderListCustomer(req.user.id, filter);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+exports.getOrderListShop = async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.page) filter.page = req.query.page;
+    if (req.query.pageSize) filter.pageSize = req.query.pageSize;
+    const result = await orderService.getOrderListShop(filter);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+exports.getOrderDetail = async (req, res) => {
+  try {
+    const order = await orderService.getOrderDetail(req.params.id);
+    res.json({ order });
+  } catch (err) {
+    res.status(404).json({ message: err.message });
+  }
+};
 const orderService = require("../services/order.service");
 const momoService = require("../services/momo.service");
 
@@ -28,7 +62,6 @@ exports.checkout = async (req, res) => {
 
 exports.confirmOrder = async (req, res, next) => {
   try {
-    // Nếu body có reject thì truyền vào service
     const userWithReject = {
       ...req.user,
       reject: req.body.reject,
