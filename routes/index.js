@@ -1,0 +1,20 @@
+var express = require("express");
+var router = express.Router();
+
+/* GET home page. */
+router.get("/", function (req, res, next) {
+  res.render("index", { title: "Express" });
+});
+
+router.use("/users", require("./users"));
+router.use("/management", require("./management"));
+router.use("/auth", require("./auth"));
+router.use("/products", require("./products"));
+router.use("/combos", require("./combos"));
+router.use("/categories", require("./categories"));
+router.use("/brands", require("./brands"));
+router.use("/models", require("./models"));
+router.use("/cart", require("./cart"));
+router.use("/orders", require("./order"));
+
+module.exports = router;
