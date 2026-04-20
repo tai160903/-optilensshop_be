@@ -248,13 +248,16 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
   await order.save();
 
   if (newStatus === "delivered") {
-    const ProductVariant = require("../models/productVariant.schema");
-    const items = await OrderItem.find({ order_id: orderId });
-    for (const item of items) {
-      await ProductVariant.updateOne(
-        { _id: item.variant_id },
-        { $inc: { stock_quantity: -item.quantity } },
-      );
+    // Chỉ trừ stock nếu KHÔNG phải preorder
+    if (order.order_type !== "preorder") {
+      const ProductVariant = require("../models/productVariant.schema");
+      const items = await OrderItem.find({ order_id: orderId });
+      for (const item of items) {
+        await ProductVariant.updateOne(
+          { _id: item.variant_id },
+          { $inc: { stock_quantity: -item.quantity } },
+        );
+      }
     }
     const payment = await Payment.findOne({ order_id: orderId, method: "cod" });
     if (payment && payment.status !== "paid") {

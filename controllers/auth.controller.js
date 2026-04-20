@@ -3,11 +3,7 @@ const authService = require("../services/auth.service");
 exports.register = async (req, res, next) => {
   try {
     const user = await authService.register(req.body || {});
-    return res.status(201).json({
-      message:
-        "Đăng ký thành công, vui lòng kiểm tra email để xác thực tài khoản",
-      user,
-    });
+    return res.status(201).json(user);
   } catch (error) {
     if (error.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });

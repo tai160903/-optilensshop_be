@@ -69,10 +69,27 @@ async function listProducts(query = {}) {
     filters.category_id = query.category_id;
   }
 
-  const [items, total] = await Promise.all([
+  const [products, total] = await Promise.all([
     Product.find(filters).sort({ createdAt: -1 }).skip(skip).limit(limit),
     Product.countDocuments(filters),
   ]);
+
+  // Lấy variants cho từng product
+  const productIds = products.map((p) => p._id);
+  const variantsArr = await ProductVariant.find({
+    product_id: { $in: productIds },
+  });
+  const variantsMap = {};
+  variantsArr.forEach((v) => {
+    const pid = v.product_id.toString();
+    if (!variantsMap[pid]) variantsMap[pid] = [];
+    variantsMap[pid].push(v);
+  });
+
+  const items = products.map((p) => ({
+    ...p.toObject(),
+    variants: variantsMap[p._id.toString()] || [],
+  }));
 
   return {
     items,
@@ -204,10 +221,112 @@ async function createProduct(payload, user) {
   };
 }
 
+async function updateProduct(id, payload, user) {
+  if (!id) throw createHttpError("Thiếu productId", 400);
+  const product = await Product.findById(id);
+  if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
+
+  // Chỉ cập nhật các trường cho phép
+  const update = {};
+  if (payload.name) update.name = payload.name;
+  if (payload.images) update.images = payload.images;
+  if (payload.description !== undefined)
+    update.description = payload.description;
+  if (payload.is_active !== undefined) update.is_active = payload.is_active;
+  if (payload.category) update.category = payload.category;
+  if (payload.brand) update.brand = payload.brand;
+  if (payload.model) update.model = payload.model;
+  if (payload.material) update.material = payload.material;
+
+  // Nếu đổi tên, cập nhật slug mới
+  if (payload.name) {
+    update.slug =
+      payload.name
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "") +
+      "-" +
+      Date.now();
+  }
+
+  const updated = await Product.findByIdAndUpdate(id, update, { new: true });
+  return { message: "Cập nhật sản phẩm thành công", product: updated };
+}
+
+async function deleteProduct(id, user) {
+  if (!id) throw createHttpError("Thiếu productId", 400);
+  const product = await Product.findById(id);
+  if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
+  // Xóa tất cả biến thể liên quan
+  await ProductVariant.deleteMany({ product_id: id });
+  // Xóa sản phẩm
+  await Product.findByIdAndDelete(id);
+  return { message: "Đã xóa sản phẩm và các biến thể liên quan" };
+}
+
+async function deleteVariant(productId, variantId, user) {
+  if (!productId || !variantId)
+    throw createHttpError("Thiếu productId hoặc variantId", 400);
+  const product = await Product.findById(productId);
+  if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
+  const variant = await ProductVariant.findOne({
+    _id: variantId,
+    product_id: productId,
+  });
+  if (!variant) throw createHttpError("Không tìm thấy biến thể", 404);
+  await ProductVariant.findByIdAndDelete(variantId);
+  return { message: "Đã xóa biến thể thành công" };
+}
+
+async function updateVariant(productId, variantId, payload, user) {
+  if (!productId || !variantId)
+    throw createHttpError("Thiếu productId hoặc variantId", 400);
+  const product = await Product.findById(productId);
+  if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
+  const variant = await ProductVariant.findOne({
+    _id: variantId,
+    product_id: productId,
+  });
+  if (!variant) throw createHttpError("Không tìm thấy biến thể", 404);
+
+  // Chỉ cập nhật các trường cho phép
+  const update = {};
+  if (payload.sku) update.sku = payload.sku;
+  if (payload.attributes) update.attributes = payload.attributes;
+  if (payload.price !== undefined) update.price = payload.price;
+  if (payload.stock_quantity !== undefined)
+    update.stock_quantity = payload.stock_quantity;
+  if (payload.images) update.images = payload.images;
+
+  const updated = await ProductVariant.findByIdAndUpdate(variantId, update, {
+    new: true,
+  });
+  return { message: "Cập nhật biến thể thành công", variant: updated };
+}
+
+async function toggleActiveProduct(id, user) {
+  if (!id) throw createHttpError("Thiếu productId", 400);
+  const product = await Product.findById(id);
+  if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
+  product.is_active = !product.is_active;
+  await product.save();
+  return { message: `Sản phẩm đã được ${product.is_active ? "hiện" : "ẩn"}` };
+}
+
 module.exports = {
   listProducts,
   getProductDetailBySlug,
   getProductVariants,
   createProduct,
   addVariant,
+  updateProduct,
+  deleteProduct,
+  deleteVariant,
+  updateVariant,
+  toggleActiveProduct,
 };
