@@ -8,10 +8,14 @@ const connectDB = require("./config/db");
 var path = require("path");
 var cookieParser = require("cookie-parser");
 var logger = require("morgan");
+var cors = require("cors");
 
 var indexRouter = require("./routes/index");
 const swaggerUi = require("swagger-ui-express");
 const getOpenApiSpec = require("./docs/openapi");
+
+var app = express();
+app.use(cors({ origin: "*", methods: "GET,HEAD,PUT,PATCH,POST,DELETE" }));
 
 // Kết nối MongoDB
 connectDB();
