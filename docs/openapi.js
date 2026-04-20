@@ -1,7 +1,3 @@
-/**
- * OpenAPI 3.0 specification — OptiLens Shop API
- * Served at /api-docs (Swagger UI)
- */
 function getOpenApiSpec() {
   const port = process.env.PORT || 3000;
   const defaultServer =
@@ -135,7 +131,10 @@ function getOpenApiSpec() {
               description: "Thêm combo — XOR với variant_id",
             },
             quantity: { type: "integer", minimum: 1 },
-            lens_params: { type: "object", description: "Prescription / thông số tròng" },
+            lens_params: {
+              type: "object",
+              description: "Prescription / thông số tròng",
+            },
           },
         },
         StaffUserBody: {
@@ -351,7 +350,10 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Danh sách staff",
           description: "manager, admin",
-          responses: { 200: { description: "OK" }, 403: { description: "Forbidden" } },
+          responses: {
+            200: { description: "OK" },
+            403: { description: "Forbidden" },
+          },
         },
         post: {
           tags: ["Management"],
@@ -373,7 +375,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Cập nhật staff",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           requestBody: {
             content: {
@@ -389,7 +396,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Xóa staff",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -415,7 +427,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Cập nhật manager",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -424,7 +441,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Xóa manager",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -434,8 +456,16 @@ function getOpenApiSpec() {
           tags: ["Products"],
           summary: "Danh sách sản phẩm",
           parameters: [
-            { name: "page", in: "query", schema: { type: "integer", default: 1 } },
-            { name: "limit", in: "query", schema: { type: "integer", default: 12 } },
+            {
+              name: "page",
+              in: "query",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer", default: 12 },
+            },
             { name: "search", in: "query", schema: { type: "string" } },
             { name: "category_id", in: "query", schema: { type: "string" } },
           ],
@@ -456,7 +486,10 @@ function getOpenApiSpec() {
                   properties: {
                     category: { type: "string" },
                     name: { type: "string" },
-                    type: { type: "string", enum: ["frame", "lens", "accessory"] },
+                    type: {
+                      type: "string",
+                      enum: ["frame", "lens", "accessory"],
+                    },
                     brand: { type: "string" },
                     model: { type: "string" },
                     material: { type: "string" },
@@ -482,9 +515,17 @@ function getOpenApiSpec() {
           tags: ["Products"],
           summary: "Chi tiết sản phẩm theo slug",
           parameters: [
-            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "slug",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
-          responses: { 200: { description: "product + variants" }, 404: { description: "Not found" } },
+          responses: {
+            200: { description: "product + variants" },
+            404: { description: "Not found" },
+          },
         },
       },
       "/products/{id}/variants": {
@@ -507,7 +548,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Thêm biến thể",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           requestBody: {
             content: {
@@ -609,7 +655,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Cập nhật danh mục",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -618,7 +669,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Xóa danh mục",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -641,7 +697,12 @@ function getOpenApiSpec() {
           tags: ["Brands"],
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -649,7 +710,12 @@ function getOpenApiSpec() {
           tags: ["Brands"],
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -672,7 +738,12 @@ function getOpenApiSpec() {
           tags: ["Models"],
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -680,7 +751,12 @@ function getOpenApiSpec() {
           tags: ["Models"],
           security: [{ bearerAuth: [] }],
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -715,7 +791,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Cập nhật số lượng dòng variant",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           requestBody: {
             content: {
@@ -737,7 +818,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Xóa dòng variant",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -832,7 +918,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Sale xác nhận / từ chối đơn",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           requestBody: {
             content: {
@@ -856,7 +947,12 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Operations cập nhật trạng thái đơn",
           parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           requestBody: {
             required: true,

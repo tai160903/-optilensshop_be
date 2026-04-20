@@ -131,6 +131,8 @@ async function register({ email, password, confirm_password }) {
   }
 
   return {
+    message:
+      "Đăng ký thành công, vui lòng kiểm tra email để xác thực tài khoản",
     email: user.email,
   };
 }
