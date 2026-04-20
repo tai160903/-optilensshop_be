@@ -15,7 +15,14 @@ const swaggerUi = require("swagger-ui-express");
 const getOpenApiSpec = require("./docs/openapi");
 
 var app = express();
-app.use(cors({ origin: "*", methods: "GET,HEAD,PUT,PATCH,POST,DELETE" }));
+app.use(
+  cors({
+    origin: "*",
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    credentials: true,
+    allowedHeaders: "Origin,X-Requested-With,Content-Type,Accept,Authorization",
+  }),
+);
 
 // Kết nối MongoDB
 connectDB();
