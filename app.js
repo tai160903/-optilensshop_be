@@ -4,15 +4,15 @@ dns.setServers(["8.8.8.8", "1.1.1.1"]);
 require("dotenv").config();
 
 var express = require("express");
-const connectDB = require("./config/db");
+const connectDB = require("./src/config/db");
 var path = require("path");
 var cookieParser = require("cookie-parser");
 var logger = require("morgan");
 var cors = require("cors");
 
-var indexRouter = require("./routes/index");
+var indexRouter = require("./src/routes/index");
 const swaggerUi = require("swagger-ui-express");
-const getOpenApiSpec = require("./docs/openapi");
+const getOpenApiSpec = require("./src/docs/openapi");
 
 var app = express();
 app.use(
@@ -26,8 +26,6 @@ app.use(
 
 // Kết nối MongoDB
 connectDB();
-var app = express();
-
 app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
