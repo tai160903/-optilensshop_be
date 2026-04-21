@@ -42,6 +42,7 @@ async function getMyProfile(userId) {
 }
 
 async function updateMyProfile(userId, payload = {}) {
+  console.log(payload);
   if (!userId) {
     throw createHttpError("Thiếu thông tin người dùng", 401);
   }
@@ -53,6 +54,7 @@ async function updateMyProfile(userId, payload = {}) {
     "gender",
     "avatar",
   ];
+
   const profileUpdates = {};
 
   allowedProfileFields.forEach((field) => {
@@ -71,6 +73,26 @@ async function updateMyProfile(userId, payload = {}) {
 
   if (!Object.keys(profileUpdates).length) {
     throw createHttpError("Không có dữ liệu profile hợp lệ để cập nhật", 400);
+  }
+  if (payload.dob !== null) {
+    const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (!dobRegex.test(String(payload.dob))) {
+      throw createHttpError("Ngày sinh phải đúng định dạng YYYY-MM-DD", 400);
+    }
+
+    const date = new Date(payload.dob);
+    const isValidDate =
+      !isNaN(date.getTime()) && payload.dob === date.toISOString().slice(0, 10);
+
+    if (!isValidDate) {
+      throw createHttpError("Ngày sinh không phải ngày hợp lệ", 400);
+    }
+  }
+  if (payload.gender !== null) {
+    if (!["male", "female", "other"].includes(payload.gender)) {
+      throw createHttpError("gender không hợp lệ", 400);
+    }
   }
 
   const user = await User.findOneAndUpdate(

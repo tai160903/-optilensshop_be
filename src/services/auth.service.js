@@ -73,7 +73,7 @@ async function login({ email, password }) {
   const user = await User.findOne({ email: normalizedEmail });
 
   if (!user) {
-    throw createHttpError("Thông tin đăng nhập không hợp lệ", 401);
+    throw createHttpError("Email hoặc password không đúng", 401);
   }
 
   if (!user.is_email_verified) {
@@ -82,7 +82,7 @@ async function login({ email, password }) {
 
   const isMatched = await bcrypt.compare(password, user.password);
   if (!isMatched) {
-    throw createHttpError("Thông tin đăng nhập không hợp lệ", 401);
+    throw createHttpError("Email hoặc password không đúng", 401);
   }
 
   const accessToken = jwt.sign(
@@ -111,8 +111,6 @@ async function login({ email, password }) {
       id: user._id,
       email: user.email,
       role: user.role,
-      status: user.status,
-      is_email_verified: user.is_email_verified,
     },
   };
 }

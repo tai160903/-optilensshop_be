@@ -1,6 +1,23 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
+const lensParamsSchema = new Schema(
+  {
+    sph_right: { type: Number },
+    sph_left: { type: Number },
+    cyl_right: { type: Number },
+    cyl_left: { type: Number },
+    axis_right: { type: Number },
+    axis_left: { type: Number },
+    add_right: { type: Number },
+    add_left: { type: Number },
+    pd: { type: Number },
+    pupillary_distance: { type: Number },
+    note: { type: String },
+  },
+  { _id: false },
+);
+
 const cartItemSchema = new Schema(
   {
     variant_id: {
@@ -14,7 +31,7 @@ const cartItemSchema = new Schema(
       default: null,
     },
     quantity: { type: Number, required: true, min: 1 },
-    lens_params: { type: Object },
+    lens_params: { type: lensParamsSchema, default: null },
 
     /** Giá tại thời điểm thêm vào giỏ — chống thay đổi giá giữa chừng */
     price_snapshot: { type: Number },

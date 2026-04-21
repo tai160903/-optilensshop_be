@@ -88,6 +88,11 @@ function ensureValidObjectId(id, fieldName) {
 async function listProducts(query = {}) {
   const page = toPositiveInt(query.page, 1);
   const limit = toPositiveInt(query.limit, 12);
+  if (query.type) {
+    if (!["frame", "lens", "accessory"].includes(query.type)) {
+      throw createHttpError("type không hợp lệ", 400);
+    }
+  }
   const skip = (page - 1) * limit;
 
   const filters = { is_active: true };

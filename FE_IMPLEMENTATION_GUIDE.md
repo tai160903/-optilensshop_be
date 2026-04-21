@@ -19,9 +19,9 @@ Tài liệu này dành cho FE để triển khai UI theo đúng logic backend hi
 - `operations`
   - Xem đơn shop, cập nhật trạng thái vận hành.
 - `manager`
-  - Quản lý product/variant/category/brand/model/combo, staff.
+  - Quản lý product/variant/category/brand/model/combo, staff, xem thống kê tổng quan.
 - `admin`
-  - Tất cả quyền manager + quản lý managers + xem đơn shop.
+  - Tất cả quyền manager + quản lý managers + xem đơn shop + xem thống kê nâng cao.
 
 ## 3) Product/Variant cho UI Catalog
 
@@ -65,6 +65,14 @@ Tài liệu này dành cho FE để triển khai UI theo đúng logic backend hi
 - Combo:
   - `combo_id`, `quantity`, optional `lens_params`
 
+`lens_params` nên gửi theo object rõ ràng:
+- `sph_right`, `sph_left`
+- `cyl_right`, `cyl_left`
+- `axis_right`, `axis_left`
+- `add_right`, `add_left`
+- `pd` hoặc `pupillary_distance`
+- `note` (optional)
+
 ### 4.3 UI notes
 
 - Giữ `lens_params` theo từng dòng item.
@@ -93,6 +101,7 @@ Rule backend:
 - Optional:
   - `discount_amount`
   - `items` (nếu checkout một phần cart)
+    - mỗi item có thể có `lens_params` theo cùng format ở mục Cart
   - `prescription_image`, `optometrist_name`, `clinic_name`
 
 ### 5.4 Response quan trọng
@@ -190,7 +199,109 @@ FE chỉ cần:
 - Bắt buộc địa chỉ và phương thức thanh toán khi checkout.
 - Disable submit khi request đang pending (tránh double submit).
 
-## 11) Suggested FE modules
+## 11) Statistics Dashboard (Manager/Admin)
+
+### 11.1 Endpoints
+
+- `GET /statistics/overview` (role: `manager`, `admin`)
+- `GET /statistics/admin` (role: `admin`)
+- `GET /statistics/timeseries` (role: `manager`, `admin`)
+- `GET /statistics/top-products` (role: `manager`, `admin`)
+- `GET /statistics/inventory-alerts` (role: `manager`, `admin`)
+- `GET /statistics/funnel` (role: `manager`, `admin`)
+
+### 11.2 Query params
+
+- `start_date` (ISO datetime, optional)
+- `end_date` (ISO datetime, optional)
+
+Nếu không truyền:
+- `end_date` = thời điểm hiện tại
+- `start_date` = `end_date - 30 ngày`
+
+### 11.3 Response chính cho `overview`
+
+- `period.start_date`, `period.end_date`
+- `orders`
+  - `total`
+  - `completed`
+  - `completion_rate` (%)
+  - `by_status` (object theo từng trạng thái đơn)
+- `revenue.total` (tổng `final_amount` của đơn `delivered/completed`)
+- `payments[]`
+  - `method`, `status`, `count`, `amount`
+
+### 11.4 Response thêm cho `admin`
+
+- `users.active_customers`
+- `users.new_customers_by_status`
+- `staff.by_role` (`sales`, `operations`, `manager`)
+
+### 11.5 Gợi ý UI
+
+- Dashboard manager: dùng `overview` để render KPI doanh thu, tỉ lệ hoàn tất, biểu đồ trạng thái đơn, payment mix.
+- Dashboard admin: dùng `admin` để bổ sung block nhân sự và tăng trưởng user.
+
+### 11.6 Timeseries chart
+
+Endpoint: `GET /statistics/timeseries`
+
+Query:
+- `start_date`, `end_date` (optional)
+- `group_by`: `day | week | month` (default `day`)
+
+Response:
+- `group_by`
+- `points[]`
+  - `label` (ví dụ: `2026-04-21`, `2026-W17`, `2026-04`)
+  - `revenue`
+  - `orders`
+
+### 11.7 Top products
+
+Endpoint: `GET /statistics/top-products`
+
+Query:
+- `start_date`, `end_date` (optional)
+- `limit` (default 10, max 50)
+
+Response:
+- `items[]`
+  - `variant_id`, `sku`
+  - `product_name`, `product_type`
+  - `sold_quantity`
+  - `revenue`
+
+### 11.8 Inventory alerts
+
+Endpoint: `GET /statistics/inventory-alerts`
+
+Query:
+- `threshold` (default 10)
+- `limit` (default 50, max 200)
+
+Response:
+- `total_alerts`
+- `items[]` gồm:
+  - `variant_id`, `sku`, `product_name`
+  - `stock_quantity`, `reserved_quantity`, `available_quantity`
+  - `stock_type`
+
+### 11.9 Funnel
+
+Endpoint: `GET /statistics/funnel`
+
+Query:
+- `start_date`, `end_date` (optional)
+
+Response:
+- `total_orders`
+- `steps[]`:
+  - `status`
+  - `count`
+  - `ratio` (% trên tổng đơn trong kỳ)
+
+## 12) Suggested FE modules
 
 - `authApi`
 - `productApi`
@@ -198,13 +309,14 @@ FE chỉ cần:
 - `orderApi`
 - `managementApi`
 - `paymentApi`
+- `statisticsApi`
 
 Mỗi module nên normalize error về cùng format:
 - `message`
 - `statusCode`
 - `raw` (optional)
 
-## 12) Quick UI checklist
+## 13) Quick UI checklist
 
 - Catalog page:
   - filter/search/pagination từ `GET /products`

@@ -6,6 +6,7 @@ const Payment = require("../models/payment.schema");
 const Combo = require("../models/combo.schema");
 const momoService = require("./momo.service");
 const { addressToString } = require("../utils/address");
+const { sanitizeLensParams } = require("../utils/lens-params");
 
 function ensureValidObjectId(id, fieldName) {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -144,11 +145,16 @@ exports.createOrderFromCart = async (userId, orderData) => {
           lens_params: i.lens_params || null,
         }));
 
+    const normalizedSelectedItems = selectedItems.map((item) => ({
+      ...item,
+      lens_params: sanitizeLensParams(item.lens_params),
+    }));
+
   // ── 3. Detect order_type TỰ ĐỘNG từ cart ───────────────────────
   // Quy tắc: PRESCRIPTION > PRE_ORDER > STOCK
     let order_type = "stock";
 
-    for (const sel of selectedItems) {
+    for (const sel of normalizedSelectedItems) {
     // Ưu tiên 1: Có lens_params → PRESCRIPTION
     if (sel.lens_params && Object.keys(sel.lens_params).length > 0) {
       order_type = "prescription";
@@ -158,7 +164,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
 
   // Ưu tiên 2: Có variant hoặc combo frame preorder → PRE_ORDER
     if (order_type === "stock") {
-      for (const sel of selectedItems) {
+      for (const sel of normalizedSelectedItems) {
       if (sel.combo_id) {
         const found = cart.items.find(
           (i) => i.combo_id && i.combo_id.toString() === sel.combo_id,
@@ -188,7 +194,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
     const itemsToOrder = [];
     let total = 0;
 
-    for (const sel of selectedItems) {
+    for (const sel of normalizedSelectedItems) {
     if (sel.combo_id) {
       // --- Combo item ---
       const found = cart.items.find(
@@ -404,7 +410,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
     }).save({ session });
     cart.items = cart.items.reduce((arr, i) => {
     const plain = i.toObject ? i.toObject() : { ...i };
-    const sel = selectedItems.find((s) => {
+    const sel = normalizedSelectedItems.find((s) => {
       if (s.combo_id && plain.combo_id) {
         return String(s.combo_id) === String(plain.combo_id);
       }

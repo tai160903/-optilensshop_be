@@ -2,6 +2,7 @@ const Cart = require("../models/cart.schema");
 const ProductVariant = require("../models/productVariant.schema");
 const Combo = require("../models/combo.schema");
 const mongoose = require("mongoose");
+const { sanitizeLensParams } = require("../utils/lens-params");
 
 function populateCartQuery(query) {
   return query.populate("items.variant_id").populate({
@@ -29,6 +30,7 @@ exports.getCartByUser = async (userId) => {
 };
 
 exports.addItem = async (userId, variant_id, quantity, lens_params) => {
+  const safeLensParams = sanitizeLensParams(lens_params);
   if (!mongoose.Types.ObjectId.isValid(variant_id)) {
     throw new Error("variant_id không hợp lệ");
   }
@@ -66,14 +68,14 @@ exports.addItem = async (userId, variant_id, quantity, lens_params) => {
 
   if (idxExisting > -1) {
     cart.items[idxExisting].quantity = totalQty;
-    if (lens_params) cart.items[idxExisting].lens_params = lens_params;
+    if (safeLensParams) cart.items[idxExisting].lens_params = safeLensParams;
     // Cập nhật price_snapshot nếu giá thay đổi (lấy giá mới nhất)
     cart.items[idxExisting].price_snapshot = variant.price;
   } else {
     cart.items.push({
       variant_id,
       quantity: Number(quantity),
-      lens_params,
+      lens_params: safeLensParams,
       price_snapshot: variant.price, // ← Lưu giá tại thời điểm thêm
     });
   }
@@ -83,6 +85,7 @@ exports.addItem = async (userId, variant_id, quantity, lens_params) => {
 };
 
 exports.addComboItem = async (userId, combo_id, quantity, lens_params) => {
+  const safeLensParams = sanitizeLensParams(lens_params);
   if (!mongoose.Types.ObjectId.isValid(combo_id)) {
     throw new Error("combo_id không hợp lệ");
   }
@@ -132,14 +135,14 @@ exports.addComboItem = async (userId, combo_id, quantity, lens_params) => {
 
   if (idxExisting > -1) {
     cart.items[idxExisting].quantity = totalQty;
-    if (lens_params) cart.items[idxExisting].lens_params = lens_params;
+    if (safeLensParams) cart.items[idxExisting].lens_params = safeLensParams;
     // Cập nhật combo_price_snapshot nếu giá thay đổi
     cart.items[idxExisting].combo_price_snapshot = combo.combo_price;
   } else {
     cart.items.push({
       combo_id,
       quantity: Number(quantity),
-      lens_params,
+      lens_params: safeLensParams,
       combo_price_snapshot: combo.combo_price, // ← Lưu giá combo tại thời điểm thêm
     });
   }
@@ -149,6 +152,7 @@ exports.addComboItem = async (userId, combo_id, quantity, lens_params) => {
 };
 
 exports.updateItem = async (userId, variant_id, quantity, lens_params) => {
+  const safeLensParams = sanitizeLensParams(lens_params);
   if (!mongoose.Types.ObjectId.isValid(variant_id)) {
     throw new Error("variant_id không hợp lệ");
   }
@@ -172,7 +176,7 @@ exports.updateItem = async (userId, variant_id, quantity, lens_params) => {
       }
     }
     cart.items[idx].quantity = quantity;
-    if (lens_params) cart.items[idx].lens_params = lens_params;
+    if (safeLensParams) cart.items[idx].lens_params = safeLensParams;
     cart.items[idx].price_snapshot = variant.price; // cập nhật giá mới nhất
     cart.updated_at = new Date();
     await cart.save();
@@ -182,6 +186,7 @@ exports.updateItem = async (userId, variant_id, quantity, lens_params) => {
 };
 
 exports.updateComboItem = async (userId, combo_id, quantity, lens_params) => {
+  const safeLensParams = sanitizeLensParams(lens_params);
   if (!mongoose.Types.ObjectId.isValid(combo_id)) {
     throw new Error("combo_id không hợp lệ");
   }
@@ -219,7 +224,7 @@ exports.updateComboItem = async (userId, combo_id, quantity, lens_params) => {
       }
     }
     cart.items[idx].quantity = q;
-    if (lens_params) cart.items[idx].lens_params = lens_params;
+    if (safeLensParams) cart.items[idx].lens_params = safeLensParams;
     cart.items[idx].combo_price_snapshot = combo.combo_price; // cập nhật giá mới nhất
     cart.updated_at = new Date();
     await cart.save();

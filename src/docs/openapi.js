@@ -24,6 +24,7 @@ function getOpenApiSpec() {
       { name: "Auth" },
       { name: "Users" },
       { name: "Management" },
+      { name: "Statistics" },
       { name: "Products" },
       { name: "Categories" },
       { name: "Brands" },
@@ -115,6 +116,22 @@ function getOpenApiSpec() {
             power: { type: "number" },
           },
         },
+        LensParamsBody: {
+          type: "object",
+          properties: {
+            sph_right: { type: "number" },
+            sph_left: { type: "number" },
+            cyl_right: { type: "number" },
+            cyl_left: { type: "number" },
+            axis_right: { type: "number" },
+            axis_left: { type: "number" },
+            add_right: { type: "number" },
+            add_left: { type: "number" },
+            pd: { type: "number" },
+            pupillary_distance: { type: "number" },
+            note: { type: "string" },
+          },
+        },
         CheckoutBody: {
           type: "object",
           required: ["shipping_address", "payment_method"],
@@ -144,6 +161,9 @@ function getOpenApiSpec() {
                   variant_id: { type: "string" },
                   combo_id: { type: "string" },
                   quantity: { type: "integer", minimum: 1 },
+                  lens_params: {
+                    $ref: "#/components/schemas/LensParamsBody",
+                  },
                 },
               },
             },
@@ -187,7 +207,12 @@ function getOpenApiSpec() {
           tags: ["Auth"],
           summary: "Xác thực email",
           parameters: [
-            { name: "token", in: "query", required: true, schema: { type: "string" } },
+            {
+              name: "token",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -242,7 +267,10 @@ function getOpenApiSpec() {
                     first_name: { type: "string" },
                     last_name: { type: "string" },
                     dob: { type: "string", format: "date" },
-                    gender: { type: "string" },
+                    gender: {
+                      type: "string",
+                      enum: ["male", "female", "other"],
+                    },
                   },
                 },
               },
@@ -332,13 +360,167 @@ function getOpenApiSpec() {
           responses: { 200: { description: "OK" } },
         },
       },
+      "/statistics/overview": {
+        get: {
+          tags: ["Statistics"],
+          security: [{ bearerAuth: [] }],
+          summary: "Thống kê tổng quan cho manager/admin",
+          parameters: [
+            {
+              name: "start_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+              description: "Mặc định: end_date - 30 ngày",
+            },
+            {
+              name: "end_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+              description: "Mặc định: thời điểm hiện tại",
+            },
+          ],
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/statistics/admin": {
+        get: {
+          tags: ["Statistics"],
+          security: [{ bearerAuth: [] }],
+          summary: "Thống kê mở rộng cho admin",
+          parameters: [
+            {
+              name: "start_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              name: "end_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+          ],
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/statistics/timeseries": {
+        get: {
+          tags: ["Statistics"],
+          security: [{ bearerAuth: [] }],
+          summary: "Thống kê doanh thu và số đơn theo thời gian",
+          parameters: [
+            {
+              name: "start_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              name: "end_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              name: "group_by",
+              in: "query",
+              schema: {
+                type: "string",
+                enum: ["day", "week", "month"],
+                default: "day",
+              },
+            },
+          ],
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/statistics/top-products": {
+        get: {
+          tags: ["Statistics"],
+          security: [{ bearerAuth: [] }],
+          summary: "Top sản phẩm theo doanh thu",
+          parameters: [
+            {
+              name: "start_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              name: "end_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer", default: 10, minimum: 1, maximum: 50 },
+            },
+          ],
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/statistics/inventory-alerts": {
+        get: {
+          tags: ["Statistics"],
+          security: [{ bearerAuth: [] }],
+          summary: "Cảnh báo tồn kho thấp",
+          parameters: [
+            {
+              name: "threshold",
+              in: "query",
+              schema: { type: "integer", default: 10, minimum: 0 },
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: {
+                type: "integer",
+                default: 50,
+                minimum: 1,
+                maximum: 200,
+              },
+            },
+          ],
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/statistics/funnel": {
+        get: {
+          tags: ["Statistics"],
+          security: [{ bearerAuth: [] }],
+          summary: "Funnel trạng thái đơn hàng",
+          parameters: [
+            {
+              name: "start_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              name: "end_date",
+              in: "query",
+              schema: { type: "string", format: "date-time" },
+            },
+          ],
+          responses: { 200: { description: "OK" } },
+        },
+      },
       "/products": {
         get: {
           tags: ["Products"],
           summary: "Danh sách sản phẩm",
           parameters: [
-            { name: "page", in: "query", schema: { type: "integer", default: 1 } },
-            { name: "limit", in: "query", schema: { type: "integer", default: 12 } },
+            {
+              name: "page",
+              in: "query",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer", default: 12 },
+            },
+            {
+              name: "type",
+              in: "query",
+              schema: { type: "string", enum: ["frame", "lens", "accessory"] },
+            },
             { name: "search", in: "query", schema: { type: "string" } },
             { name: "category", in: "query", schema: { type: "string" } },
             { name: "category_id", in: "query", schema: { type: "string" } },
@@ -357,7 +539,10 @@ function getOpenApiSpec() {
                   properties: {
                     category: { type: "string" },
                     name: { type: "string" },
-                    type: { type: "string", enum: ["frame", "lens", "accessory"] },
+                    type: {
+                      type: "string",
+                      enum: ["frame", "lens", "accessory"],
+                    },
                     brand: { type: "string" },
                     model: { type: "string" },
                     material: { type: "string" },
@@ -366,7 +551,10 @@ function getOpenApiSpec() {
                       type: "array",
                       items: { type: "string", format: "binary" },
                     },
-                    variants: { type: "string", description: "JSON string của mảng variants" },
+                    variants: {
+                      type: "string",
+                      description: "JSON string của mảng variants",
+                    },
                   },
                 },
               },
@@ -380,7 +568,12 @@ function getOpenApiSpec() {
           tags: ["Products"],
           summary: "Chi tiết sản phẩm theo slug",
           parameters: [
-            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "slug",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: { 200: { description: "OK" } },
         },
@@ -462,42 +655,133 @@ function getOpenApiSpec() {
         },
       },
       "/categories": {
-        get: { tags: ["Categories"], summary: "Danh sách categories", responses: { 200: { description: "OK" } } },
-        post: { tags: ["Categories"], security: [{ bearerAuth: [] }], summary: "Tạo category", responses: { 201: { description: "Created" } } },
+        get: {
+          tags: ["Categories"],
+          summary: "Danh sách categories",
+          responses: { 200: { description: "OK" } },
+        },
+        post: {
+          tags: ["Categories"],
+          security: [{ bearerAuth: [] }],
+          summary: "Tạo category",
+          responses: { 201: { description: "Created" } },
+        },
       },
       "/categories/{id}": {
-        put: { tags: ["Categories"], security: [{ bearerAuth: [] }], summary: "Cập nhật category", parameters: [objectIdParam("id", "Category ID")], responses: { 200: { description: "OK" } } },
-        delete: { tags: ["Categories"], security: [{ bearerAuth: [] }], summary: "Xóa category", parameters: [objectIdParam("id", "Category ID")], responses: { 200: { description: "OK" } } },
+        put: {
+          tags: ["Categories"],
+          security: [{ bearerAuth: [] }],
+          summary: "Cập nhật category",
+          parameters: [objectIdParam("id", "Category ID")],
+          responses: { 200: { description: "OK" } },
+        },
+        delete: {
+          tags: ["Categories"],
+          security: [{ bearerAuth: [] }],
+          summary: "Xóa category",
+          parameters: [objectIdParam("id", "Category ID")],
+          responses: { 200: { description: "OK" } },
+        },
       },
       "/brands": {
-        get: { tags: ["Brands"], summary: "Danh sách brands", responses: { 200: { description: "OK" } } },
-        post: { tags: ["Brands"], security: [{ bearerAuth: [] }], summary: "Tạo brand", responses: { 201: { description: "Created" } } },
+        get: {
+          tags: ["Brands"],
+          summary: "Danh sách brands",
+          responses: { 200: { description: "OK" } },
+        },
+        post: {
+          tags: ["Brands"],
+          security: [{ bearerAuth: [] }],
+          summary: "Tạo brand",
+          responses: { 201: { description: "Created" } },
+        },
       },
       "/brands/{id}": {
-        put: { tags: ["Brands"], security: [{ bearerAuth: [] }], summary: "Cập nhật brand", parameters: [objectIdParam("id", "Brand ID")], responses: { 200: { description: "OK" } } },
-        delete: { tags: ["Brands"], security: [{ bearerAuth: [] }], summary: "Xóa brand", parameters: [objectIdParam("id", "Brand ID")], responses: { 200: { description: "OK" } } },
+        put: {
+          tags: ["Brands"],
+          security: [{ bearerAuth: [] }],
+          summary: "Cập nhật brand",
+          parameters: [objectIdParam("id", "Brand ID")],
+          responses: { 200: { description: "OK" } },
+        },
+        delete: {
+          tags: ["Brands"],
+          security: [{ bearerAuth: [] }],
+          summary: "Xóa brand",
+          parameters: [objectIdParam("id", "Brand ID")],
+          responses: { 200: { description: "OK" } },
+        },
       },
       "/models": {
-        get: { tags: ["Models"], summary: "Danh sách models", responses: { 200: { description: "OK" } } },
-        post: { tags: ["Models"], security: [{ bearerAuth: [] }], summary: "Tạo model", responses: { 201: { description: "Created" } } },
+        get: {
+          tags: ["Models"],
+          summary: "Danh sách models",
+          responses: { 200: { description: "OK" } },
+        },
+        post: {
+          tags: ["Models"],
+          security: [{ bearerAuth: [] }],
+          summary: "Tạo model",
+          responses: { 201: { description: "Created" } },
+        },
       },
       "/models/{id}": {
-        put: { tags: ["Models"], security: [{ bearerAuth: [] }], summary: "Cập nhật model", parameters: [objectIdParam("id", "Model ID")], responses: { 200: { description: "OK" } } },
-        delete: { tags: ["Models"], security: [{ bearerAuth: [] }], summary: "Xóa model", parameters: [objectIdParam("id", "Model ID")], responses: { 200: { description: "OK" } } },
+        put: {
+          tags: ["Models"],
+          security: [{ bearerAuth: [] }],
+          summary: "Cập nhật model",
+          parameters: [objectIdParam("id", "Model ID")],
+          responses: { 200: { description: "OK" } },
+        },
+        delete: {
+          tags: ["Models"],
+          security: [{ bearerAuth: [] }],
+          summary: "Xóa model",
+          parameters: [objectIdParam("id", "Model ID")],
+          responses: { 200: { description: "OK" } },
+        },
       },
       "/combos": {
-        get: { tags: ["Combos"], summary: "Danh sách combos", responses: { 200: { description: "OK" } } },
-        post: { tags: ["Combos"], security: [{ bearerAuth: [] }], summary: "Tạo combo", responses: { 201: { description: "Created" } } },
+        get: {
+          tags: ["Combos"],
+          summary: "Danh sách combos",
+          responses: { 200: { description: "OK" } },
+        },
+        post: {
+          tags: ["Combos"],
+          security: [{ bearerAuth: [] }],
+          summary: "Tạo combo",
+          responses: { 201: { description: "Created" } },
+        },
       },
       "/combos/{id}": {
-        put: { tags: ["Combos"], security: [{ bearerAuth: [] }], summary: "Cập nhật combo", parameters: [objectIdParam("id", "Combo ID")], responses: { 200: { description: "OK" } } },
-        delete: { tags: ["Combos"], security: [{ bearerAuth: [] }], summary: "Xóa combo", parameters: [objectIdParam("id", "Combo ID")], responses: { 200: { description: "OK" } } },
+        put: {
+          tags: ["Combos"],
+          security: [{ bearerAuth: [] }],
+          summary: "Cập nhật combo",
+          parameters: [objectIdParam("id", "Combo ID")],
+          responses: { 200: { description: "OK" } },
+        },
+        delete: {
+          tags: ["Combos"],
+          security: [{ bearerAuth: [] }],
+          summary: "Xóa combo",
+          parameters: [objectIdParam("id", "Combo ID")],
+          responses: { 200: { description: "OK" } },
+        },
       },
       "/combos/{slug}": {
         get: {
           tags: ["Combos"],
           summary: "Chi tiết combo theo slug",
-          parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }],
+          parameters: [
+            {
+              name: "slug",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
           responses: { 200: { description: "OK" } },
         },
       },
@@ -523,7 +807,9 @@ function getOpenApiSpec() {
                     variant_id: { type: "string" },
                     combo_id: { type: "string" },
                     quantity: { type: "integer", minimum: 1 },
-                    lens_params: { type: "object" },
+                    lens_params: {
+                      $ref: "#/components/schemas/LensParamsBody",
+                    },
                   },
                 },
               },
@@ -671,7 +957,14 @@ function getOpenApiSpec() {
           tags: ["Payments"],
           security: [{ bearerAuth: [] }],
           summary: "Đánh dấu payment success",
-          parameters: [{ name: "orderId", in: "query", required: true, schema: { type: "string" } }],
+          parameters: [
+            {
+              name: "orderId",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
           responses: { 200: { description: "OK" } },
         },
       },
@@ -680,7 +973,14 @@ function getOpenApiSpec() {
           tags: ["Payments"],
           security: [{ bearerAuth: [] }],
           summary: "Đánh dấu payment fail",
-          parameters: [{ name: "orderId", in: "query", required: true, schema: { type: "string" } }],
+          parameters: [
+            {
+              name: "orderId",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
           responses: { 200: { description: "OK" } },
         },
       },
@@ -692,10 +992,18 @@ function getOpenApiSpec() {
         },
       },
       "/momo/return": {
-        get: { tags: ["MoMo"], summary: "MoMo return URL", responses: { 302: { description: "Redirect" } } },
+        get: {
+          tags: ["MoMo"],
+          summary: "MoMo return URL",
+          responses: { 302: { description: "Redirect" } },
+        },
       },
       "/momo/ipn": {
-        post: { tags: ["MoMo"], summary: "MoMo IPN", responses: { 200: { description: "OK" } } },
+        post: {
+          tags: ["MoMo"],
+          summary: "MoMo IPN",
+          responses: { 200: { description: "OK" } },
+        },
       },
     },
   };
