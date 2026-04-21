@@ -1021,7 +1021,7 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Tạo sản phẩm (multipart)",
           description:
-            "Form-data: `category`, `name`, `type`, `variants` (JSON string), `images` (file[]), v.v.",
+            "Form-data: `category`, `name`, `type`, `attributes`, `images` (file[]), v.v.",
           requestBody: {
             content: {
               "multipart/form-data": {
@@ -1039,9 +1039,10 @@ function getOpenApiSpec() {
                     model: { type: "string" },
                     material: { type: "string" },
                     description: { type: "string" },
-                    variants: {
-                      type: "string",
-                      description: "JSON array biến thể",
+                    attributes: {
+                      type: "object",
+                      description:
+                        "Thuộc tính sản phẩm tùy loại (frame: color, size; lens: color, material; accessory: material, v.v.)",
                     },
                     images: {
                       type: "array",

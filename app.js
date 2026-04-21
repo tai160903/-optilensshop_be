@@ -17,7 +17,7 @@ const getOpenApiSpec = require("./src/docs/openapi");
 var app = express();
 app.use(
   cors({
-    origin: "*",
+    origin: "http://localhost:3000", // Thay đổi nếu frontend chạy trên cổng khács
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true,
     allowedHeaders: "Origin,X-Requested-With,Content-Type,Accept,Authorization",

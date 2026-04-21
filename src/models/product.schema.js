@@ -28,6 +28,12 @@ const productSchema = new Schema(
       ref: "Model",
       required: false, // Có thể bắt buộc nếu cần
     },
+    gender: {
+      type: String,
+      enum: ["male", "female", "unisex"],
+      default: "unisex",
+    },
+    shape: { type: String }, // Hình dáng gọng kính
     images: [{ type: String }],
     is_active: { type: Boolean, default: true },
   },
