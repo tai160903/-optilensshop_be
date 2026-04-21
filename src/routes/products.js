@@ -5,7 +5,13 @@ const { authenticate, authorize } = require("../middlewares/auth.middleware");
 const router = express.Router();
 // Multer cấu hình memoryStorage để upload file lên Cloudinary
 const multer = require("multer");
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 10,
+  },
+});
 
 router.get("/", productController.listProducts);
 router.get("/:slug", productController.getProductDetailBySlug);

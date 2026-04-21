@@ -26,10 +26,12 @@ exports.getOrderListShop = async (req, res) => {
 
 exports.getOrderDetail = async (req, res) => {
   try {
-    const order = await orderService.getOrderDetail(req.params.id);
+    const order = await orderService.getOrderDetail(req.params.id, req.user);
     res.json({ order });
   } catch (err) {
-    res.status(404).json({ message: err.message });
+    const statusCode =
+      err.message === "Bạn không có quyền xem đơn hàng này" ? 403 : 404;
+    res.status(statusCode).json({ message: err.message });
   }
 };
 const orderService = require("../services/order.service");

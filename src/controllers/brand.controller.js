@@ -11,6 +11,9 @@ async function listBrands(req, res, next) {
 
 async function createBrand(req, res, next) {
   try {
+    if (req.file) {
+      req.body.logo = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    }
     const data = await brandService.createBrand(req.body);
     return res.status(201).json(data);
   } catch (error) {

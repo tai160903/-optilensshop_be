@@ -8,30 +8,7 @@ const mailService = require("./mail.service");
 const mongoose = require("mongoose");
 const { createHttpError } = require("../utils/create-http-error");
 const { getVerificationEmailTemplate } = require("../templates/verification");
-
-async function sendVerificationForUser(user) {
-  const verificationToken = crypto.randomBytes(32).toString("hex");
-  const verificationExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 phút
-
-  user.email_verification_token = verificationToken;
-  user.email_verification_expires = verificationExpires;
-  await user.save();
-
-  const verificationLink = `${process.env.APP_BASE_URL || "http://localhost:3000"}/auth/verify-email?token=${verificationToken}`;
-
-  await mailService.sendMail({
-    to: user.email,
-    subject: "Xác thực email — OptiLens Shop",
-    text: `Chào bạn,\n\nCảm ơn bạn đã đăng ký tài khoản tại OptiLens Shop.\nNhấn liên kết sau để xác thực email và kích hoạt tài khoản:\n\n${verificationLink}\n\nLiên kết có hiệu lực trong 30 phút. Nếu hết hạn, hãy yêu cầu gửi lại email xác thực.\n\nNếu bạn không đăng ký tài khoản, vui lòng bỏ qua email này.`,
-    html: getVerificationEmailTemplate(verificationLink),
-  });
-
-  return {
-    message: "Đã gửi email xác thực, vui lòng kiểm tra hộp thư đến",
-    verification_token: verificationToken,
-    verification_expires: verificationExpires,
-  };
-}
+const getForgotPasswordEmailTemplate = require("../templates/forgot-password");
 
 async function register({ email, password, confirm_password }) {
   if (!password || !email || !confirm_password) {
@@ -177,7 +154,18 @@ async function resendVerificationEmail({ email }) {
     throw createHttpError("Email đã được xác thực trước đó", 400);
   }
 
-  await sendVerificationForUser(user);
+  try {
+    await mailService.sendMail({
+      to: user.email,
+      subject: "Xác thực email — OptiLens Shop",
+      html: getVerificationEmailTemplate(
+        `${process.env.APP_BASE_URL || "http://localhost:3000"}/auth/verify-email?token=${user.email_verification_token}`,
+      ),
+    });
+  } catch (error) {
+    console.log(error);
+    throw createHttpError("Lỗi gửi email xác thực, vui lòng thử lại", 500);
+  }
   return { message: "Đã gửi lại email xác thực" };
 }
 
@@ -200,9 +188,10 @@ async function forgotPassword({ email }) {
   await user.save();
 
   const resetLink = `${process.env.APP_BASE_URL || "http://localhost:3000"}/auth/reset-password?token=${resetToken}`;
-  await mailService.sendResetPasswordEmail({
+  await mailService.sendMail({
     to: user.email,
-    resetLink,
+    subject: "Hướng dẫn đặt lại mật khẩu — OptiLens Shop",
+    html: getForgotPasswordEmailTemplate(resetLink),
   });
 
   return {
@@ -223,7 +212,9 @@ async function resetPassword({ token, password, confirm_password }) {
   if (password.length < 5 || password.length > 64) {
     throw createHttpError(`Password phải từ 5 đến 64 ký tự`, 400);
   }
-  validateConfirmPassword(password, confirm_password);
+  if (password !== confirm_password) {
+    throw createHttpError("Password và confirm password không khớp", 400);
+  }
 
   const user = await User.findOne({ reset_password_token: token });
   if (!user) {
@@ -266,7 +257,10 @@ async function changePassword({
   if (new_password.length < 5 || new_password.length > 64) {
     throw createHttpError(`Password phải từ 5 đến 64 ký tự`, 400);
   }
-  validateConfirmPassword(new_password, confirm_new_password);
+  if (new_password !== confirm_new_password) {
+    throw createHttpError("Password và confirm password không khớp", 400);
+  }
+
   const validNewPassword = new_password;
 
   const user = await User.findById(userId);

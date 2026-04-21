@@ -2,7 +2,8 @@ const Brand = require("../models/brand.schema");
 const { createHttpError } = require("../utils/create-http-error");
 
 async function listBrands() {
-  return Brand.find({ is_active: true });
+  const brands = await Brand.find({ is_active: true });
+  return { message: "Danh sách brand", brands };
 }
 
 async function createBrand(payload) {

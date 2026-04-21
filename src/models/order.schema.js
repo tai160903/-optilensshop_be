@@ -32,6 +32,7 @@ const orderSchema = new Schema({
   total_amount:   { type: Number, required: true },
   shipping_fee:    { type: Number, default: 0 },
   discount_amount: { type: Number, default: 0 },
+  final_amount:    { type: Number, default: 0 },
   shipping_address: { type: String, required: true },
 
   /** Đơn có cần gia công tròng không (true khi order_type = prescription) */
@@ -46,18 +47,13 @@ const orderSchema = new Schema({
   timestamps: { createdAt: false, updatedAt: true },
 });
 
-// Computed virtual: final_amount tự động tính
-orderSchema.virtual("final_amount").get(function () {
-  return (
-    (this.total_amount || 0)
-    - (this.discount_amount || 0)
-    + (this.shipping_fee || 0)
-  );
-});
-
 // Đảm bảo requires_fabrication luôn sync với order_type
 orderSchema.pre("save", function (next) {
   this.requires_fabrication = this.order_type === "prescription";
+  this.final_amount =
+    (this.total_amount || 0) -
+    (this.discount_amount || 0) +
+    (this.shipping_fee || 0);
   next();
 });
 

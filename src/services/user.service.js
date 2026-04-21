@@ -5,8 +5,15 @@ const {
   sendStaffDeletedEmail,
 } = require("./mail.service");
 const { createHttpError } = require("../utils/create-http-error");
-const ALLOWED_STAFF_ROLES = ["sales", "operations", "manager"];
+const mongoose = require("mongoose");
+const ALLOWED_STAFF_ROLES = ["sales", "operations"];
 const ALLOWED_MANAGER_ROLE = "manager";
+
+function ensureValidObjectId(id, fieldName) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw createHttpError(`${fieldName} không hợp lệ`, 400);
+  }
+}
 
 function sanitizeUser(user) {
   return {
@@ -129,6 +136,7 @@ async function createStaff({ email, password, role, status = "active" }) {
 }
 
 async function updateStaff(staffId, payload = {}) {
+  ensureValidObjectId(staffId, "staffId");
   const staff = await User.findOne({ _id: staffId, is_deleted: false });
   if (!staff) {
     throw createHttpError("Không tìm thấy staff", 404);
@@ -163,6 +171,7 @@ async function updateStaff(staffId, payload = {}) {
 }
 
 async function deleteStaff(staffId) {
+  ensureValidObjectId(staffId, "staffId");
   const staff = await User.findOne({ _id: staffId, is_deleted: false });
   if (!staff) {
     throw createHttpError("Không tìm thấy staff", 404);
@@ -200,6 +209,7 @@ async function createManager({ email, password, status = "active" }) {
 }
 
 async function updateManager(managerId, payload = {}) {
+  ensureValidObjectId(managerId, "managerId");
   const manager = await User.findOne({ _id: managerId, is_deleted: false });
   if (!manager) {
     throw createHttpError("Không tìm thấy manager", 404);
@@ -226,6 +236,7 @@ async function updateManager(managerId, payload = {}) {
 }
 
 async function deleteManager(managerId) {
+  ensureValidObjectId(managerId, "managerId");
   const manager = await User.findOne({ _id: managerId, is_deleted: false });
   if (!manager) {
     throw createHttpError("Không tìm thấy manager", 404);

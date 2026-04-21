@@ -3,14 +3,41 @@ const ProductVariant = require("../models/productVariant.schema");
 const Category = require("../models/category.schema");
 const Brand = require("../models/brand.schema");
 const Model = require("../models/model.schema");
+const mongoose = require("mongoose");
 const { createHttpError } = require("../utils/create-http-error");
+
+function normalizeVariantFields(input = {}) {
+  const normalized = {
+    color: input.color,
+    size: input.size,
+    bridge_fit: input.bridge_fit,
+    diameter: input.diameter,
+    base_curve: input.base_curve,
+    power: input.power,
+  };
+
+  // Backward compatibility: hỗ trợ payload cũ dạng attributes object
+  if (input.attributes && typeof input.attributes === "object") {
+    normalized.color = normalized.color ?? input.attributes.color;
+    normalized.size = normalized.size ?? input.attributes.size;
+    normalized.bridge_fit =
+      normalized.bridge_fit ?? input.attributes.bridge_fit;
+    normalized.diameter = normalized.diameter ?? input.attributes.diameter;
+    normalized.base_curve =
+      normalized.base_curve ?? input.attributes.base_curve;
+    normalized.power = normalized.power ?? input.attributes.power;
+  }
+
+  return normalized;
+}
 
 async function addVariant(productId, payload, user) {
   if (!productId) throw createHttpError("Thiếu productId", 400);
+  ensureValidObjectId(productId, "productId");
   const product = await Product.findById(productId);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
 
-  let { sku, attributes, price, stock_quantity, images } = payload;
+  let { sku, price, stock_quantity, images } = payload;
   if (!price) {
     throw createHttpError("Thiếu giá cho biến thể", 400);
   }
@@ -22,13 +49,14 @@ async function addVariant(productId, payload, user) {
   if (exists) {
     throw createHttpError("SKU biến thể đã tồn tại", 409);
   }
+  const normalizedVariant = normalizeVariantFields(payload);
   const variant = await ProductVariant.create({
     product_id: productId,
     sku,
-    attributes: attributes || {},
     price,
     stock_quantity: stock_quantity || 0,
     images: images || [],
+    ...normalizedVariant,
   });
   return { message: "Thêm biến thể thành công", variant };
 }
@@ -37,6 +65,24 @@ function toPositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed) || parsed <= 0) return fallback;
   return parsed;
+}
+
+function buildSlug(name) {
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function ensureValidObjectId(id, fieldName) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw createHttpError(`${fieldName} không hợp lệ`, 400);
+  }
 }
 
 async function listProducts(query = {}) {
@@ -52,13 +98,12 @@ async function listProducts(query = {}) {
       filters.$or = [
         { name: { $regex: keyword, $options: "i" } },
         { slug: { $regex: keyword, $options: "i" } },
-        { sku: { $regex: keyword, $options: "i" } },
       ];
     }
   }
 
-  if (query.category_id) {
-    filters.category_id = query.category_id;
+  if (query.category || query.category_id) {
+    filters.category = query.category || query.category_id;
   }
 
   const [products, total] = await Promise.all([
@@ -115,6 +160,7 @@ async function getProductVariants(productId) {
   if (!productId) {
     throw createHttpError("Thiếu productId", 400);
   }
+  ensureValidObjectId(productId, "productId");
 
   const product = await Product.findOne({ _id: productId, is_active: true });
   if (!product) {
@@ -140,18 +186,14 @@ async function createProduct(payload, user) {
     description,
     variants,
   } = payload;
-  if (!category || !name || !variants || images === undefined) {
+  if (!category || !name || images === undefined) {
     throw createHttpError("Thiếu thông tin bắt buộc", 400);
   }
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  ensureValidObjectId(category, "category");
+  if (!Array.isArray(variants) || variants.length === 0) {
+    throw createHttpError("Phải nhập ít nhất 1 biến thể cho sản phẩm", 400);
+  }
+  const slug = buildSlug(name);
   const exists = await Product.findOne({ slug });
   if (exists) {
     throw createHttpError("Slug đã tồn tại", 409);
@@ -176,20 +218,19 @@ async function createProduct(payload, user) {
     category,
     name,
     slug,
+    type: type || "frame",
+    brand: brand || null,
+    model: model || null,
+    material: material || "",
     images: images || [],
     description: description || "",
     is_active: true,
   });
 
-  if (!Array.isArray(variants) || variants.length === 0) {
-    throw createHttpError("Phải nhập ít nhất 1 biến thể cho sản phẩm", 400);
-  }
-
   const createdVariants = await ProductVariant.insertMany(
     variants.map((v, idx) => {
       let sku = v.sku;
       if (!sku) {
-        // Sinh SKU chắc chắn unique theo từng variant
         const random = Math.random()
           .toString(36)
           .substring(2, 10)
@@ -199,10 +240,10 @@ async function createProduct(payload, user) {
       return {
         product_id: product._id,
         sku,
-        attributes: v.attributes || {},
         price: v.price || 0,
         stock_quantity: v.stock_quantity || 0,
         images: v.images || [],
+        ...normalizeVariantFields(v),
       };
     }),
   );
@@ -215,6 +256,7 @@ async function createProduct(payload, user) {
 
 async function updateProduct(id, payload, user) {
   if (!id) throw createHttpError("Thiếu productId", 400);
+  ensureValidObjectId(id, "productId");
   const product = await Product.findById(id);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
 
@@ -232,18 +274,15 @@ async function updateProduct(id, payload, user) {
 
   // Nếu đổi tên, cập nhật slug mới
   if (payload.name) {
-    update.slug =
-      payload.name
-        .trim()
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-+|-+$/g, "") +
-      "-" +
-      Date.now();
+    update.slug = buildSlug(payload.name);
+
+    const duplicatedSlug = await Product.findOne({
+      slug: update.slug,
+      _id: { $ne: id },
+    });
+    if (duplicatedSlug) {
+      throw createHttpError("Slug đã tồn tại", 409);
+    }
   }
 
   const updated = await Product.findByIdAndUpdate(id, update, { new: true });
@@ -252,6 +291,7 @@ async function updateProduct(id, payload, user) {
 
 async function deleteProduct(id, user) {
   if (!id) throw createHttpError("Thiếu productId", 400);
+  ensureValidObjectId(id, "productId");
   const product = await Product.findById(id);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   // Xóa tất cả biến thể liên quan
@@ -264,6 +304,8 @@ async function deleteProduct(id, user) {
 async function deleteVariant(productId, variantId, user) {
   if (!productId || !variantId)
     throw createHttpError("Thiếu productId hoặc variantId", 400);
+  ensureValidObjectId(productId, "productId");
+  ensureValidObjectId(variantId, "variantId");
   const product = await Product.findById(productId);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   const variant = await ProductVariant.findOne({
@@ -278,6 +320,8 @@ async function deleteVariant(productId, variantId, user) {
 async function updateVariant(productId, variantId, payload, user) {
   if (!productId || !variantId)
     throw createHttpError("Thiếu productId hoặc variantId", 400);
+  ensureValidObjectId(productId, "productId");
+  ensureValidObjectId(variantId, "variantId");
   const product = await Product.findById(productId);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   const variant = await ProductVariant.findOne({
@@ -289,11 +333,11 @@ async function updateVariant(productId, variantId, payload, user) {
   // Chỉ cập nhật các trường cho phép
   const update = {};
   if (payload.sku) update.sku = payload.sku;
-  if (payload.attributes) update.attributes = payload.attributes;
   if (payload.price !== undefined) update.price = payload.price;
   if (payload.stock_quantity !== undefined)
     update.stock_quantity = payload.stock_quantity;
   if (payload.images) update.images = payload.images;
+  Object.assign(update, normalizeVariantFields(payload));
 
   const updated = await ProductVariant.findByIdAndUpdate(variantId, update, {
     new: true,
@@ -303,6 +347,7 @@ async function updateVariant(productId, variantId, payload, user) {
 
 async function toggleActiveProduct(id, user) {
   if (!id) throw createHttpError("Thiếu productId", 400);
+  ensureValidObjectId(id, "productId");
   const product = await Product.findById(id);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   product.is_active = !product.is_active;

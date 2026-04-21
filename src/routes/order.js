@@ -14,7 +14,7 @@ router.get(
 router.get(
   "/all",
   authMiddleware.authenticate,
-  authMiddleware.authorize(["sales", "manager", "operations"]),
+  authMiddleware.authorize(["sales", "manager", "operations", "admin"]),
   orderController.getOrderListShop,
 );
 

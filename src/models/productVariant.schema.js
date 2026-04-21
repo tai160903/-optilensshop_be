@@ -7,6 +7,7 @@ const productVariantSchema = new Schema(
     sku: { type: String, required: true, unique: true },
     price: { type: Number, required: true },
     stock_quantity: { type: Number, required: true },
+    reserved_quantity: { type: Number, default: 0 },
     images: [{ type: String }],
 
     // Cho gọng kính
@@ -18,6 +19,11 @@ const productVariantSchema = new Schema(
     diameter: { type: Number },
     base_curve: { type: Number },
     power: { type: Number },
+    stock_type: {
+      type: String,
+      enum: ["in_stock", "preorder", "discontinued"],
+      default: "in_stock",
+    },
 
     is_active: { type: Boolean, default: true },
   },
@@ -26,7 +32,7 @@ const productVariantSchema = new Schema(
 
 // Virtual: số lượng thực sự có thể bán (available = stock - reserved)
 productVariantSchema.virtual("available_quantity").get(function () {
-  return Math.max(0, this.stock_quantity - this.reserved_quantity);
+  return Math.max(0, this.stock_quantity - (this.reserved_quantity || 0));
 });
 
 module.exports = mongoose.model("ProductVariant", productVariantSchema);

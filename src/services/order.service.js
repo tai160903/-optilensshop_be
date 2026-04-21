@@ -7,18 +7,42 @@ const Combo = require("../models/combo.schema");
 const momoService = require("./momo.service");
 const { addressToString } = require("../utils/address");
 
-/**
- * Detect order_type từ cart items
- * Quy tắc: PRESCRIPTION > PRE_ORDER > STOCK
- *
- * - Có lens_params (đơn thuốc) → PRESCRIPTION
- * - Có variant preorder / combo frame preorder → PRE_ORDER
- * - Còn lại → STOCK
- *
- * @param {Array} cartItems  - Mảng cart items (đã populate variant/combo)
- * @param {Object} comboMap  - Map combo_id → combo data (option)
- * @returns {"stock"|"pre_order"|"prescription"}
- */
+function ensureValidObjectId(id, fieldName) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error(`${fieldName} không hợp lệ`);
+  }
+}
+
+function aggregateItemsByVariant(items = []) {
+  const qtyMap = new Map();
+  for (const item of items) {
+    const key = item.variant_id.toString();
+    qtyMap.set(key, (qtyMap.get(key) || 0) + Number(item.quantity || 0));
+  }
+  return qtyMap;
+}
+
+async function decreaseReservedSafely(ProductVariant, variantId, quantity) {
+  const result = await ProductVariant.updateOne(
+    { _id: variantId, reserved_quantity: { $gte: quantity } },
+    { $inc: { reserved_quantity: -quantity } },
+  );
+  if (result.modifiedCount === 0) {
+    throw new Error(`Không đủ reserved_quantity để trừ cho biến thể ${variantId}`);
+  }
+}
+
+async function decreaseStockSafely(ProductVariant, variantId, quantity) {
+  const result = await ProductVariant.updateOne(
+    { _id: variantId, stock_quantity: { $gte: quantity } },
+    { $inc: { stock_quantity: -quantity } },
+  );
+  if (result.modifiedCount === 0) {
+    throw new Error(`Không đủ stock_quantity để trừ cho biến thể ${variantId}`);
+  }
+}
+
+
 function determineOrderType(cartItems, comboMap = {}) {
   // 1️⃣ PRESCRIPTION — có lens_params (đơn thuốc)
   for (const item of cartItems) {
@@ -78,7 +102,7 @@ exports.checkoutWithPayment = async (userId, orderData) => {
   let payUrl = null;
   if (orderData.payment_method === "momo") {
     const momoRes = await momoService.createMomoPayment({
-      amount: order.total_amount,
+      amount: order.final_amount,
       orderId: order._id.toString(),
       orderInfo: `Thanh toán đơn hàng #${order._id}`,
       redirectUrl: process.env.MOMO_REDIRECT_URL,
@@ -92,33 +116,39 @@ exports.checkoutWithPayment = async (userId, orderData) => {
 exports.createOrderFromCart = async (userId, orderData) => {
   const ProductVariant = require("../models/productVariant.schema");
   const PrescriptionOrder = require("../models/prescriptionOrder.schema");
+  const session = await mongoose.startSession();
 
-  // ── 1. Lấy cart ────────────────────────────────────────────────
-  let cart = await Cart.findOne({ user_id: userId }).populate({
-    path: "items.combo_id",
-    populate: [
-      { path: "frame_variant_id", select: "stock_type stock_quantity" },
-      { path: "lens_variant_id", select: "stock_type stock_quantity" },
-    ],
-  });
+  try {
+    session.startTransaction();
 
-  if (!cart || !cart.items.length) throw new Error("Giỏ hàng trống");
+    // ── 1. Lấy cart ────────────────────────────────────────────────
+    let cart = await Cart.findOne({ user_id: userId })
+      .session(session)
+      .populate({
+        path: "items.combo_id",
+        populate: [
+          { path: "frame_variant_id", select: "stock_type stock_quantity" },
+          { path: "lens_variant_id", select: "stock_type stock_quantity" },
+        ],
+      });
+
+    if (!cart || !cart.items.length) throw new Error("Giỏ hàng trống");
 
   // ── 2. Chọn items đặt hàng (hoặc lấy toàn bộ cart) ─────────────
-  const selectedItems = (Array.isArray(orderData.items) && orderData.items.length)
-    ? orderData.items
-    : cart.items.map((i) => ({
-        combo_id:   i.combo_id   ? i.combo_id.toString()   : null,
-        variant_id: i.variant_id ? i.variant_id.toString() : null,
-        quantity:   i.quantity,
-        lens_params: i.lens_params || null,
-      }));
+    const selectedItems = (Array.isArray(orderData.items) && orderData.items.length)
+      ? orderData.items
+      : cart.items.map((i) => ({
+          combo_id:   i.combo_id   ? i.combo_id.toString()   : null,
+          variant_id: i.variant_id ? i.variant_id.toString() : null,
+          quantity:   i.quantity,
+          lens_params: i.lens_params || null,
+        }));
 
   // ── 3. Detect order_type TỰ ĐỘNG từ cart ───────────────────────
   // Quy tắc: PRESCRIPTION > PRE_ORDER > STOCK
-  let order_type = "stock";
+    let order_type = "stock";
 
-  for (const sel of selectedItems) {
+    for (const sel of selectedItems) {
     // Ưu tiên 1: Có lens_params → PRESCRIPTION
     if (sel.lens_params && Object.keys(sel.lens_params).length > 0) {
       order_type = "prescription";
@@ -127,8 +157,8 @@ exports.createOrderFromCart = async (userId, orderData) => {
   }
 
   // Ưu tiên 2: Có variant hoặc combo frame preorder → PRE_ORDER
-  if (order_type === "stock") {
-    for (const sel of selectedItems) {
+    if (order_type === "stock") {
+      for (const sel of selectedItems) {
       if (sel.combo_id) {
         const found = cart.items.find(
           (i) => i.combo_id && i.combo_id.toString() === sel.combo_id,
@@ -139,24 +169,26 @@ exports.createOrderFromCart = async (userId, orderData) => {
           break;
         }
       }
-      if (sel.variant_id) {
-        const found = cart.items.find(
-          (i) => i.variant_id && i.variant_id.toString() === sel.variant_id,
-        );
-        const variant = await ProductVariant.findById(sel.variant_id).select("stock_type");
+        if (sel.variant_id) {
+          const found = cart.items.find(
+            (i) => i.variant_id && i.variant_id.toString() === sel.variant_id,
+          );
+          const variant = await ProductVariant.findById(sel.variant_id)
+            .session(session)
+            .select("stock_type");
         if (variant?.stock_type === "preorder") {
           order_type = "pre_order";
           break;
         }
+        }
       }
     }
-  }
 
   // ── 4. Validate stock & build itemsToOrder ─────────────────────
-  const itemsToOrder = [];
-  let total = 0;
+    const itemsToOrder = [];
+    let total = 0;
 
-  for (const sel of selectedItems) {
+    for (const sel of selectedItems) {
     if (sel.combo_id) {
       // --- Combo item ---
       const found = cart.items.find(
@@ -164,12 +196,14 @@ exports.createOrderFromCart = async (userId, orderData) => {
       );
       if (!found) throw new Error("Item combo trong cart không hợp lệ");
 
-      const combo = await Combo.findOne({ _id: found.combo_id, is_active: true });
+      const combo = await Combo.findOne({ _id: found.combo_id, is_active: true }).session(
+        session,
+      );
       if (!combo) throw new Error("Combo không còn hiệu lực");
 
       const [frame, lens] = await Promise.all([
-        ProductVariant.findById(combo.frame_variant_id),
-        ProductVariant.findById(combo.lens_variant_id),
+        ProductVariant.findById(combo.frame_variant_id).session(session),
+        ProductVariant.findById(combo.lens_variant_id).session(session),
       ]);
       if (!frame || !lens) throw new Error("Không tìm thấy biến thể trong combo");
 
@@ -188,10 +222,12 @@ exports.createOrderFromCart = async (userId, orderData) => {
         await ProductVariant.updateOne(
           { _id: frame._id },
           { $inc: { reserved_quantity: orderQty } },
+          { session },
         );
         await ProductVariant.updateOne(
           { _id: lens._id },
           { $inc: { reserved_quantity: orderQty } },
+          { session },
         );
       }
 
@@ -224,7 +260,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
       );
       if (!found) throw new Error("Item trong cart không hợp lệ");
 
-      const variant = await ProductVariant.findById(found.variant_id);
+      const variant = await ProductVariant.findById(found.variant_id).session(session);
       if (!variant) throw new Error("Không tìm thấy biến thể sản phẩm");
 
       const orderQty = Number(sel.quantity ?? found.quantity);
@@ -240,6 +276,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
         await ProductVariant.updateOne(
           { _id: variant._id },
           { $inc: { reserved_quantity: orderQty } },
+          { session },
         );
       }
 
@@ -258,33 +295,32 @@ exports.createOrderFromCart = async (userId, orderData) => {
   }
 
   // ── 5. Shipping address ────────────────────────────────────────
-  let shippingAddressStr = "";
-  if (orderData.shipping_address && typeof orderData.shipping_address === "object") {
-    shippingAddressStr = addressToString(orderData.shipping_address);
-  } else {
-    shippingAddressStr = orderData.shipping_address || "";
-  }
+    let shippingAddressStr = "";
+    if (orderData.shipping_address && typeof orderData.shipping_address === "object") {
+      shippingAddressStr = addressToString(orderData.shipping_address);
+    } else {
+      shippingAddressStr = orderData.shipping_address || "";
+    }
 
   // ── 6. Tạo Order ───────────────────────────────────────────────
-  const shipping_fee = orderData.shipping_method === "ship" ? 30000 : 0;
-  const discount_amount = Number(orderData.discount_amount) || 0;
-  const final_amount = total - discount_amount + shipping_fee;
+    const shipping_fee = orderData.shipping_method === "ship" ? 30000 : 0;
+    const discount_amount = Number(orderData.discount_amount) || 0;
+    const final_amount = total - discount_amount + shipping_fee;
 
-  const order = new Order({
-    user_id: userId,
-    order_type,                           // ← Tự detect, không lấy từ FE
-    status: "pending",
-    total_amount: total,
-    shipping_fee,
-    discount_amount,
-    final_amount,
-    shipping_address: shippingAddressStr,
-    // requires_fabrication tự set trong pre("save") của schema
-  });
-  await order.save();
+    const order = new Order({
+      user_id: userId,
+      order_type,
+      status: "pending",
+      total_amount: total,
+      shipping_fee,
+      discount_amount,
+      final_amount,
+      shipping_address: shippingAddressStr,
+    });
+    await order.save({ session });
 
   // ── 7. Tạo OrderItems ──────────────────────────────────────────
-  for (const item of itemsToOrder) {
+    for (const item of itemsToOrder) {
     if (item.kind === "combo") {
       await new OrderItem({
         order_id: order._id,
@@ -295,7 +331,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
         combo_id: item.combo_id,
         combo_group_id: item.combo_group_id,
         item_type: "frame",
-      }).save();
+      }).save({ session });
       await new OrderItem({
         order_id: order._id,
         variant_id: item.lens_variant_id,
@@ -305,12 +341,14 @@ exports.createOrderFromCart = async (userId, orderData) => {
         combo_id: item.combo_id,
         combo_group_id: item.combo_group_id,
         item_type: "lens",
-      }).save();
+      }).save({ session });
     } else {
       // Xác định item_type từ product
       let item_type = null;
       if (item.variant_id) {
-        const pv = await ProductVariant.findById(item.variant_id).populate("product_id");
+        const pv = await ProductVariant.findById(item.variant_id)
+          .session(session)
+          .populate("product_id");
         if (pv?.product_id) {
           item_type = pv.product_id.type; // "frame" | "lens" | "accessory"
         }
@@ -322,46 +360,49 @@ exports.createOrderFromCart = async (userId, orderData) => {
         unit_price: item.price || 0,
         lens_params: item.lens_params,
         item_type,
-      }).save();
+      }).save({ session });
     }
   }
 
   // ── 8. Tạo PrescriptionOrder nếu là đơn prescription ───────────
-  if (order_type === "prescription") {
-    const prescriptionItems = itemsToOrder.filter(
-      (i) => i.lens_params && Object.keys(i.lens_params).length > 0,
-    );
-    for (const item of prescriptionItems) {
-      const lp = item.lens_params || {};
-      await PrescriptionOrder.create({
-        order_id: order._id,
-        // Ghi nhận lens_params từ cart
-        sph_right: lp.sph_right,
-        sph_left: lp.sph_left,
-        cyl_right: lp.cyl_right,
-        cyl_left: lp.cyl_left,
-        axis_right: lp.axis_right,
-        axis_left: lp.axis_left,
-        add_right: lp.add_right,
-        add_left: lp.add_left,
-        pd: lp.pd,
-        pupillary_distance: lp.pupillary_distance,
-        // Các field bổ sung từ orderData nếu có
-        prescription_image: orderData.prescription_image,
-        optometrist_name: orderData.optometrist_name,
-        clinic_name: orderData.clinic_name,
-      });
+    if (order_type === "prescription") {
+      const prescriptionItems = itemsToOrder.filter(
+        (i) => i.lens_params && Object.keys(i.lens_params).length > 0,
+      );
+      for (const item of prescriptionItems) {
+        const lp = item.lens_params || {};
+        await PrescriptionOrder.create(
+          [
+            {
+              order_id: order._id,
+              sph_right: lp.sph_right,
+              sph_left: lp.sph_left,
+              cyl_right: lp.cyl_right,
+              cyl_left: lp.cyl_left,
+              axis_right: lp.axis_right,
+              axis_left: lp.axis_left,
+              add_right: lp.add_right,
+              add_left: lp.add_left,
+              pd: lp.pd,
+              pupillary_distance: lp.pupillary_distance,
+              prescription_image: orderData.prescription_image,
+              optometrist_name: orderData.optometrist_name,
+              clinic_name: orderData.clinic_name,
+            },
+          ],
+          { session },
+        );
+      }
     }
-  }
 
   // ── 9. Tạo Payment record ─────────────────────────────────────
-  await new Payment({
-    order_id: order._id,
-    amount: total,
-    method: orderData.payment_method,
-    status: orderData.payment_method === "cod" ? "pending" : "pending-payment",
-  }).save();
-  cart.items = cart.items.reduce((arr, i) => {
+    await new Payment({
+      order_id: order._id,
+      amount: final_amount,
+      method: orderData.payment_method,
+      status: orderData.payment_method === "cod" ? "pending" : "pending-payment",
+    }).save({ session });
+    cart.items = cart.items.reduce((arr, i) => {
     const plain = i.toObject ? i.toObject() : { ...i };
     const sel = selectedItems.find((s) => {
       if (s.combo_id && plain.combo_id) {
@@ -395,10 +436,18 @@ exports.createOrderFromCart = async (userId, orderData) => {
       });
     }
     return arr;
-  }, []);
-  cart.updated_at = new Date();
-  await cart.save();
-  return order;
+    }, []);
+    cart.updated_at = new Date();
+    await cart.save({ session });
+
+    await session.commitTransaction();
+    return order;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };
 
 const STATE_TRANSITIONS = {
@@ -476,8 +525,10 @@ function getAllowedTransitions(currentStatus, orderType) {
 }
 
 exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
+  ensureValidObjectId(orderId, "orderId");
   const order = await Order.findById(orderId);
   if (!order) throw new Error("Không tìm thấy đơn hàng");
+  const previousStatus = order.status;
 
   // 🔒 Validate state machine transition (có order_type)
   if (!isValidTransition(order.status, newStatus, order.order_type)) {
@@ -512,39 +563,44 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
     if (order.order_type === "pre_order") {
       const OrderItem = require("../models/orderItem.schema");
       const items = await OrderItem.find({ order_id: orderId });
+      const qtyMap = aggregateItemsByVariant(items);
 
-      for (const item of items) {
-        // reserved_quantity giảm, stock_quantity tăng
+      for (const [variantId, qty] of qtyMap.entries()) {
+        await decreaseReservedSafely(ProductVariant, variantId, qty);
         await ProductVariant.updateOne(
-          { _id: item.variant_id },
-          {
-            $inc: {
-              stock_quantity: item.quantity,
-              reserved_quantity: -item.quantity,
-            },
-          },
+          { _id: variantId },
+          { $inc: { stock_quantity: qty } },
         );
       }
     }
   }
 
   if (newStatus === "packed") {
-    // STOCK: trừ gọng (frame)
-    // PRESCRIPTION: trừ gọng (tròng để manufacturing)
-    // PRE_ORDER: chỉ trừ khi ĐÃ received (hàng về kho rồi)
+    // PRE_ORDER: chỉ packed sau received.
+    // PRESCRIPTION: trừ các item không phải lens tại packed (lens đã trừ ở manufacturing).
+    // STOCK/PRE_ORDER: trừ stock toàn bộ item tại packed.
     const isPreOrderNotReceived =
-      order.order_type === "pre_order" && order.status !== "received";
+      order.order_type === "pre_order" && previousStatus !== "received";
 
     if (!isPreOrderNotReceived) {
       const OrderItem = require("../models/orderItem.schema");
       const items = await OrderItem.find({ order_id: orderId });
 
       for (const item of items) {
-        // Dùng item_type đã lưu khi tạo OrderItem (ko cần populate lại)
-        if (item.item_type === "frame") {
-          await ProductVariant.updateOne(
-            { _id: item.variant_id },
-            { $inc: { stock_quantity: -item.quantity } },
+        if (order.order_type === "prescription") {
+          // Prescription: lens được trừ ở manufacturing, packed chỉ trừ phần còn lại.
+          if (item.item_type !== "lens") {
+            await decreaseStockSafely(
+              ProductVariant,
+              item.variant_id,
+              Number(item.quantity),
+            );
+          }
+        } else {
+          await decreaseStockSafely(
+            ProductVariant,
+            item.variant_id,
+            Number(item.quantity),
           );
         }
       }
@@ -559,9 +615,10 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
 
       for (const item of items) {
         if (item.item_type === "lens") {
-          await ProductVariant.updateOne(
-            { _id: item.variant_id },
-            { $inc: { stock_quantity: -item.quantity } },
+          await decreaseStockSafely(
+            ProductVariant,
+            item.variant_id,
+            Number(item.quantity),
           );
         }
       }
@@ -581,24 +638,25 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
   // Hoàn stock / reserved khi returned / cancelled
   if (newStatus === "returned" || newStatus === "cancelled") {
     const items = await OrderItem.find({ order_id: orderId });
+    const qtyMap = aggregateItemsByVariant(items);
 
-    for (const item of items) {
+    if (newStatus === "cancelled") {
+      // CANCELLED chỉ xảy ra ở trạng thái sớm; chưa có flow hoàn stock cho stock/prescription.
+      // Với pre_order, hủy trước received -> cần giảm reserved.
       if (order.order_type === "pre_order") {
-        // Pre-order: hoàn reserved_quantity (chưa trừ stock)
-        await ProductVariant.updateOne(
-          { _id: item.variant_id },
-          { $inc: { reserved_quantity: -item.quantity } },
-        );
-      } else {
-        // Stock / Prescription: hoàn stock_quantity (đã trừ ở packed/manufacturing)
-        await ProductVariant.updateOne(
-          { _id: item.variant_id },
-          { $inc: { stock_quantity: item.quantity } },
-        );
+        for (const [variantId, qty] of qtyMap.entries()) {
+          await decreaseReservedSafely(ProductVariant, variantId, qty);
       }
     }
+    } else if (newStatus === "returned") {
+      // RETURNED: hàng đã từng được trừ stock -> hoàn stock lại.
+      for (const [variantId, qty] of qtyMap.entries()) {
+        await ProductVariant.updateOne(
+          { _id: variantId },
+          { $inc: { stock_quantity: qty } },
+        );
+      }
 
-    if (newStatus === "returned") {
       const payment = await Payment.findOne({ order_id: orderId, method: "cod" });
       if (payment && payment.status !== "failed") {
         payment.status = "failed";
@@ -612,6 +670,7 @@ exports.updateOrderStatus = async (orderId, newStatus, userRole) => {
 };
 
 exports.confirmOrder = async (orderId, user) => {
+  ensureValidObjectId(orderId, "orderId");
   const order = await Order.findById(orderId);
   if (!order) throw new Error("Không tìm thấy đơn hàng");
   if (
@@ -640,6 +699,7 @@ exports.confirmOrder = async (orderId, user) => {
  * Customer hủy đơn — chỉ pending mới được hủy
  */
 exports.cancelOrder = async (orderId, userId, reason) => {
+  ensureValidObjectId(orderId, "orderId");
   const order = await Order.findById(orderId);
   if (!order) throw new Error("Không tìm thấy đơn hàng");
 
@@ -661,11 +721,9 @@ exports.cancelOrder = async (orderId, userId, reason) => {
     const ProductVariant = require("../models/productVariant.schema");
     const OrderItem = require("../models/orderItem.schema");
     const items = await OrderItem.find({ order_id: orderId });
-    for (const item of items) {
-      await ProductVariant.updateOne(
-        { _id: item.variant_id },
-        { $inc: { reserved_quantity: -item.quantity } },
-      );
+    const qtyMap = aggregateItemsByVariant(items);
+    for (const [variantId, qty] of qtyMap.entries()) {
+      await decreaseReservedSafely(ProductVariant, variantId, qty);
     }
   }
 
@@ -752,9 +810,19 @@ exports.getOrderListShop = async (filter = {}) => {
   };
 };
 
-exports.getOrderDetail = async (orderId) => {
+exports.getOrderDetail = async (orderId, requester) => {
+  ensureValidObjectId(orderId, "orderId");
   const order = await Order.findById(orderId);
   if (!order) throw new Error("Không tìm thấy đơn hàng");
+  const requesterId = requester?._id || requester?.id;
+  const requesterRole = requester?.role;
+  const privilegedRoles = ["sales", "manager", "operations", "admin"];
+  const isOwner =
+    requesterId && order.user_id.toString() === requesterId.toString();
+  const canView = isOwner || privilegedRoles.includes(requesterRole);
+  if (!canView) {
+    throw new Error("Bạn không có quyền xem đơn hàng này");
+  }
   const items = await OrderItem.find({ order_id: orderId });
   const payment = await Payment.findOne({ order_id: orderId });
 
