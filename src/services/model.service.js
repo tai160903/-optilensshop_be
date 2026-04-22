@@ -2,7 +2,11 @@ const Model = require("../models/model.schema");
 const { createHttpError } = require("../utils/create-http-error");
 
 async function listModels() {
-  return Model.find({ is_active: true });
+  const models = await Model.find({ is_active: true });
+  return {
+    message: "Lấy danh sách model thành công",
+    models,
+  };
 }
 
 async function createModel(payload) {

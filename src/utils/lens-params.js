@@ -24,7 +24,8 @@ function sanitizeLensParams(input) {
 
   for (const key of ALLOWED_LENS_PARAM_KEYS) {
     const rawValue = input[key];
-    if (rawValue === undefined || rawValue === null || rawValue === "") continue;
+    if (rawValue === undefined || rawValue === null || rawValue === "")
+      continue;
 
     if (NUMERIC_KEYS.includes(key)) {
       const numericValue = Number(rawValue);

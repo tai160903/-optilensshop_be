@@ -17,6 +17,7 @@ router.use("/models", require("./models"));
 router.use("/cart", require("./cart"));
 router.use("/orders", require("./order"));
 router.use("/momo", require("./momo"));
+router.use("/vnpay", require("./vnpay"));
 router.use("/payment", require("./payment"));
 router.use("/statistics", require("./statistics"));
 

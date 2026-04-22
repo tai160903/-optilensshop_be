@@ -150,7 +150,7 @@ function getOpenApiSpec() {
                 },
               ],
             },
-            payment_method: { type: "string", enum: ["cod", "momo"] },
+            payment_method: { type: "string", enum: ["cod", "momo", "vnpay"] },
             shipping_method: { type: "string", enum: ["ship", "pickup"] },
             discount_amount: { type: "number" },
             items: {
@@ -221,6 +221,18 @@ function getOpenApiSpec() {
         post: {
           tags: ["Auth"],
           summary: "Gửi lại mail xác thực",
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    email: { type: "string", format: "email" },
+                  },
+                },
+              },
+            },
+          },
           responses: { 200: { description: "OK" } },
         },
       },

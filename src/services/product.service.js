@@ -161,18 +161,33 @@ async function getProductDetailBySlug(slug) {
   return { product, variants };
 }
 
-async function getProductVariants(productId) {
+async function getProductVariants(productId, query = {}) {
   if (!productId) {
     throw createHttpError("Thiếu productId", 400);
   }
   ensureValidObjectId(productId, "productId");
+
+  // filter by type + search
+  const filters = { product_id: productId };
+  if (query.type) {
+    if (!["frame", "lens", "accessory"].includes(query.type)) {
+      throw createHttpError("type không hợp lệ", 400);
+    }
+    filters.product_id.type = query.type;
+  }
+  if (query.search) {
+    filters.$or = [
+      { name: { $regex: query.search, $options: "i" } },
+      { sku: { $regex: query.search, $options: "i" } },
+    ];
+  }
 
   const product = await Product.findOne({ _id: productId, is_active: true });
   if (!product) {
     throw createHttpError("Không tìm thấy sản phẩm", 404);
   }
 
-  const variants = await ProductVariant.find({ product_id: productId }).sort({
+  const variants = await ProductVariant.find(filters).sort({
     createdAt: -1,
   });
 

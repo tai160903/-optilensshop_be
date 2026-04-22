@@ -28,9 +28,7 @@ exports.addItem = async (req, res) => {
         lens_params,
       );
     } else {
-      return res
-        .status(400)
-        .json({ message: "Cần variant_id hoặc combo_id" });
+      return res.status(400).json({ message: "Cần variant_id hoặc combo_id" });
     }
     res.status(200).json({ message: "Thêm vào giỏ thành công", cart });
   } catch (err) {
@@ -87,7 +85,9 @@ exports.updateComboItem = async (req, res) => {
         .status(404)
         .json({ message: "Không tìm thấy combo trong giỏ." });
     }
-    res.status(200).json({ message: "Cập nhật combo trong giỏ thành công", cart });
+    res
+      .status(200)
+      .json({ message: "Cập nhật combo trong giỏ thành công", cart });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -98,9 +98,7 @@ exports.removeComboItem = async (req, res) => {
     const { combo_id } = req.params;
     const cart = await cartService.removeComboItem(req.user.id, combo_id);
     if (!cart) {
-      return res
-        .status(404)
-        .json({ message: "Không tìm thấy giỏ hàng." });
+      return res.status(404).json({ message: "Không tìm thấy giỏ hàng." });
     }
     res.status(200).json({ message: "Xóa combo khỏi giỏ thành công", cart });
   } catch (err) {

@@ -25,11 +25,11 @@ exports.handleReturn = (req, res) => {
     const result = momoService.verifyMomoReturn(req.query);
     if (result.isSuccess) {
       return res.redirect(
-        `${process.env.CLIENT_URL}/checkout/success?orderId=${req.query.orderId}`,
+        `${process.env.FRONTEND_URL}/checkout/success?orderId=${req.query.orderId}`,
       );
     } else {
       return res.redirect(
-        `${process.env.CLIENT_URL}/checkout/fail?orderId=${req.query.orderId}&msg=${encodeURIComponent(result.message)}`,
+        `${process.env.FRONTEND_URL}/checkout/fail?orderId=${req.query.orderId}&msg=${encodeURIComponent(result.message)}`,
       );
     }
   } catch (err) {

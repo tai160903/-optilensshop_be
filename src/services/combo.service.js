@@ -4,12 +4,6 @@ const ProductVariant = require("../models/productVariant.schema");
 const Product = require("../models/product.schema");
 const { createHttpError } = require("../utils/create-http-error");
 
-function toPositiveInt(value, fallback) {
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed <= 0) return fallback;
-  return parsed;
-}
-
 async function assertFrameLensPair(frameVariantId, lensVariantId) {
   if (
     !mongoose.Types.ObjectId.isValid(frameVariantId) ||
@@ -46,10 +40,16 @@ async function assertFrameLensPair(frameVariantId, lensVariantId) {
 }
 
 async function listCombos(query = {}) {
-  const page = toPositiveInt(query.page, 1);
-  const limit = toPositiveInt(query.limit, 20);
+  const page = Number.parseInt(query.page, 10) || 1;
+  const limit = Number.parseInt(query.limit, 10) || 20;
   const skip = (page - 1) * limit;
   const filters = { is_active: true };
+  if (query.search) {
+    filters.$or = [
+      { name: { $regex: query.search, $options: "i" } },
+      { slug: { $regex: query.search, $options: "i" } },
+    ];
+  }
   const [items, total] = await Promise.all([
     Combo.find(filters)
       .sort({ createdAt: -1 })

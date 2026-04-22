@@ -39,14 +39,17 @@ async function register({ email, password, confirm_password }) {
     status: "active",
     is_email_verified: false,
   });
+  const emailVerificationToken = crypto.randomBytes(32).toString("hex");
+  user.email_verification_token = emailVerificationToken;
+  user.email_verification_expires = new Date(Date.now() + 30 * 60 * 1000); // 30 phút
+  await user.save();
 
   try {
     await mailService.sendMail({
       to: user.email,
       subject: "Xác thực email — OptiLens Shop",
-      text: `Chào bạn,\n\nCảm ơn bạn đã đăng ký tài khoản tại OptiLens Shop.\nNhấn liên kết sau để xác thực email và kích hoạt tài khoản:\n\n${process.env.APP_BASE_URL || "http://localhost:3000"}/auth/verify-email?token=${user.email_verification_token}\n\nLiên kết có hiệu lực trong 30 phút. Nếu hết hạn, hãy yêu cầu gửi lại email xác thực.\n\nNếu bạn không đăng ký tài khoản, vui lòng bỏ qua email này.`,
       html: getVerificationEmailTemplate(
-        `${process.env.APP_BASE_URL || "http://localhost:3000"}/auth/verify-email?token=${user.email_verification_token}`,
+        `${process.env.APP_BASE_URL || "http://localhost:3000"}/auth/verify-email?token=${emailVerificationToken}`,
       ),
     });
   } catch (mailErr) {
@@ -151,6 +154,11 @@ async function resendVerificationEmail({ email }) {
   if (user.is_email_verified) {
     throw createHttpError("Email đã được xác thực trước đó", 400);
   }
+
+  const emailVerificationToken = crypto.randomBytes(32).toString("hex");
+  user.email_verification_token = emailVerificationToken;
+  user.email_verification_expires = new Date(Date.now() + 30 * 60 * 1000); // 30 phút
+  await user.save();
 
   try {
     await mailService.sendMail({

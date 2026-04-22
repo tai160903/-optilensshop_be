@@ -34,7 +34,8 @@ exports.addItem = async (userId, variant_id, quantity, lens_params) => {
   if (!mongoose.Types.ObjectId.isValid(variant_id)) {
     throw new Error("variant_id không hợp lệ");
   }
-  const variant = await ProductVariant.findById(variant_id).populate("product_id");
+  const variant =
+    await ProductVariant.findById(variant_id).populate("product_id");
   if (!variant) {
     throw new Error("Không tìm thấy biến thể sản phẩm");
   }
@@ -103,7 +104,10 @@ exports.addComboItem = async (userId, combo_id, quantity, lens_params) => {
   }
 
   // ── Validate stock_type ─────────────────────────────────────
-  if (frame.stock_type === "discontinued" || lens.stock_type === "discontinued") {
+  if (
+    frame.stock_type === "discontinued" ||
+    lens.stock_type === "discontinued"
+  ) {
     throw new Error("Sản phẩm trong combo đã ngừng kinh doanh");
   }
 
@@ -156,7 +160,8 @@ exports.updateItem = async (userId, variant_id, quantity, lens_params) => {
   if (!mongoose.Types.ObjectId.isValid(variant_id)) {
     throw new Error("variant_id không hợp lệ");
   }
-  const variant = await ProductVariant.findById(variant_id).populate("product_id");
+  const variant =
+    await ProductVariant.findById(variant_id).populate("product_id");
   if (!variant) {
     throw new Error("Không tìm thấy biến thể sản phẩm");
   }
@@ -201,7 +206,10 @@ exports.updateComboItem = async (userId, combo_id, quantity, lens_params) => {
   if (!frame || !lens) {
     throw new Error("Combo thiếu biến thể gọng hoặc tròng");
   }
-  if (frame.stock_type === "discontinued" || lens.stock_type === "discontinued") {
+  if (
+    frame.stock_type === "discontinued" ||
+    lens.stock_type === "discontinued"
+  ) {
     throw new Error("Sản phẩm trong combo đã ngừng kinh doanh");
   }
   const cart = await Cart.findOne({ user_id: userId });

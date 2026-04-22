@@ -35,7 +35,6 @@ exports.getOrderDetail = async (req, res) => {
   }
 };
 const orderService = require("../services/order.service");
-const momoService = require("../services/momo.service");
 
 exports.checkout = async (req, res) => {
   try {
@@ -62,24 +61,12 @@ exports.checkout = async (req, res) => {
   }
 };
 
-exports.confirmOrder = async (req, res, next) => {
+exports.confirmOrder = async (req, res) => {
   try {
-    const userWithReject = {
-      ...req.user,
-      reject: req.body.reject,
-      reject_reason: req.body.reject_reason,
-    };
-    const order = await orderService.confirmOrder(
-      req.params.id,
-      userWithReject,
-    );
-    if (req.body.reject) {
-      res.json({ message: "Đơn hàng đã bị từ chối", order });
-    } else {
-      res.json({ message: "Đơn hàng đã được xác nhận", order });
-    }
+    const order = await orderService.confirmOrder(req.params.id, req.user.id);
+    res.json({ message: "Đã xác nhận đơn hàng", order });
   } catch (err) {
-    next(err);
+    res.status(400).json({ message: err.message });
   }
 };
 

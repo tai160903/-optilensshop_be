@@ -19,6 +19,7 @@ const productVariantSchema = new Schema(
     diameter: { type: Number },
     base_curve: { type: Number },
     power: { type: Number },
+
     stock_type: {
       type: String,
       enum: ["in_stock", "preorder", "discontinued"],

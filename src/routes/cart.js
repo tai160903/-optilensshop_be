@@ -7,7 +7,11 @@ router.get("/", authenticate, cartController.getCart);
 router.post("/items", authenticate, cartController.addItem);
 router.put("/items/:id", authenticate, cartController.updateItem);
 router.delete("/items/:id", authenticate, cartController.removeItem);
-router.put("/combo-items/:combo_id", authenticate, cartController.updateComboItem);
+router.put(
+  "/combo-items/:combo_id",
+  authenticate,
+  cartController.updateComboItem,
+);
 router.delete(
   "/combo-items/:combo_id",
   authenticate,

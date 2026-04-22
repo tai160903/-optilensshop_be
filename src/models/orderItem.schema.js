@@ -30,7 +30,7 @@ const orderItemSchema = new Schema({
   lens_params: { type: lensParamsSchema, default: null },
 
   /** Dòng sinh ra từ combo */
-  combo_id:       { type: Schema.Types.ObjectId, ref: "Combo" },
+  combo_id: { type: Schema.Types.ObjectId, ref: "Combo" },
   combo_group_id: { type: Schema.Types.ObjectId },
 
   /** Loại sản phẩm: frame / lens — dùng để xác định trừ stock timing */
@@ -40,6 +40,5 @@ const orderItemSchema = new Schema({
     default: null,
   },
 });
-
 
 module.exports = mongoose.model("OrderItem", orderItemSchema);
