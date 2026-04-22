@@ -1,4 +1,3 @@
-// Xác thực phản hồi trả về từ MoMo (chữ ký + trạng thái)
 exports.verifyMomoReturn = (query) => {
   if (!query) {
     throw new Error("Missing momo query parameters");

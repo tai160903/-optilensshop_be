@@ -45,6 +45,36 @@ exports.updateMyProfile = async (req, res, next) => {
   }
 };
 
+exports.getMyAddresses = async (req, res, next) => {
+  try {
+    const result = await userService.getMyAddresses(getUserIdFromReq(req));
+    return res.status(200).json({ items: result });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+    return next(error);
+  }
+};
+
+exports.addMyAddress = async (req, res, next) => {
+  try {
+    const result = await userService.addMyAddress(
+      getUserIdFromReq(req),
+      req.body || {},
+    );
+    return res.status(201).json({
+      message: "Thêm địa chỉ thành công",
+      items: result,
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+    return next(error);
+  }
+};
+
 exports.listStaff = async (req, res, next) => {
   try {
     const result = await userService.listStaff();

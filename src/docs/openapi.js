@@ -97,16 +97,21 @@ function getOpenApiSpec() {
             },
           },
         },
+        AddressBody: {
+          type: "object",
+          required: ["full_name", "phone", "address"],
+          properties: {
+            full_name: { type: "string" },
+            phone: { type: "string" },
+            address: { type: "string" },
+          },
+        },
         ProductVariantBody: {
           type: "object",
           properties: {
             sku: { type: "string" },
             price: { type: "number" },
             stock_quantity: { type: "integer" },
-            stock_type: {
-              type: "string",
-              enum: ["in_stock", "preorder", "discontinued"],
-            },
             images: { type: "array", items: { type: "string" } },
             color: { type: "string" },
             size: { type: "string" },
@@ -152,7 +157,6 @@ function getOpenApiSpec() {
             },
             payment_method: { type: "string", enum: ["cod", "momo", "vnpay"] },
             shipping_method: { type: "string", enum: ["ship", "pickup"] },
-            discount_amount: { type: "number" },
             items: {
               type: "array",
               items: {
@@ -289,6 +293,28 @@ function getOpenApiSpec() {
             },
           },
           responses: { 200: { description: "OK" } },
+        },
+      },
+      "/users/me/addresses": {
+        get: {
+          tags: ["Users"],
+          security: [{ bearerAuth: [] }],
+          summary: "Lay danh sach dia chi trong profile",
+          responses: { 200: { description: "OK" } },
+        },
+        post: {
+          tags: ["Users"],
+          security: [{ bearerAuth: [] }],
+          summary: "Them dia chi vao profile.addresses",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/AddressBody" },
+              },
+            },
+          },
+          responses: { 201: { description: "Created" } },
         },
       },
       "/management/staff": {

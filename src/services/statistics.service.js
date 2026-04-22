@@ -306,7 +306,6 @@ exports.getInventoryAlertsStats = async (query = {}) => {
     {
       $match: {
         is_active: true,
-        stock_type: { $ne: "discontinued" },
       },
     },
     {
@@ -343,7 +342,6 @@ exports.getInventoryAlertsStats = async (query = {}) => {
       sku: row.sku,
       product_id: row.product_id,
       product_name: row.product?.name || "Unknown product",
-      stock_type: row.stock_type,
       stock_quantity: row.stock_quantity,
       reserved_quantity: row.reserved_quantity || 0,
       available_quantity: row.available_quantity || 0,

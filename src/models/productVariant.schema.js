@@ -10,8 +10,9 @@ const productVariantSchema = new Schema(
     reserved_quantity: { type: Number, default: 0 },
     images: [{ type: String }],
 
-    // Cho gọng kính
     color: { type: String },
+
+    // Cho gọng kính
     size: { type: String },
     bridge_fit: { type: String },
 
@@ -19,12 +20,6 @@ const productVariantSchema = new Schema(
     diameter: { type: Number },
     base_curve: { type: Number },
     power: { type: Number },
-
-    stock_type: {
-      type: String,
-      enum: ["in_stock", "preorder", "discontinued"],
-      default: "in_stock",
-    },
 
     is_active: { type: Boolean, default: true },
   },

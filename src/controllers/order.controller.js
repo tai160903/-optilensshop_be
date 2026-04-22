@@ -44,6 +44,10 @@ exports.checkout = async (req, res) => {
       payment_method,
       shipping_method,
       items,
+      deposit_rate,
+      prescription_image,
+      optometrist_name,
+      clinic_name,
     } = req.body;
     const { order, payUrl } = await orderService.checkoutWithPayment(
       req.user.id,
@@ -53,9 +57,38 @@ exports.checkout = async (req, res) => {
         payment_method,
         shipping_method,
         items,
+        deposit_rate,
+        prescription_image,
+        optometrist_name,
+        clinic_name,
       },
     );
     res.status(201).json({ message: "Đặt hàng thành công", order, payUrl });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+exports.preorderNow = async (req, res) => {
+  try {
+    const {
+      shipping_address,
+      payment_method,
+      shipping_method,
+      items,
+      deposit_rate,
+    } = req.body;
+    const { order, payUrl } =
+      await orderService.createPreorderDirectWithPayment(req.user.id, {
+        shipping_address,
+        payment_method,
+        shipping_method,
+        items,
+        deposit_rate,
+      });
+    res
+      .status(201)
+      .json({ message: "Tạo đơn preorder thành công", order, payUrl });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

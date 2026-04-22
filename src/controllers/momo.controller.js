@@ -1,4 +1,5 @@
 const momoService = require("../services/momo.service");
+const paymentService = require("../services/payment.service");
 
 // Tạo thanh toán MoMo
 exports.createPayment = async (req, res) => {
@@ -42,9 +43,17 @@ exports.handleIpn = (req, res) => {
   try {
     const result = momoService.verifyMomoReturn(req.body);
     if (result.isSuccess) {
-      // Cập nhật trạng thái đơn hàng ở đây nếu cần
-      return res.status(200).json({ message: "IPN received", resultCode: 0 });
+      paymentService
+        .success(req.body.orderId)
+        .then(() =>
+          res.status(200).json({ message: "IPN received", resultCode: 0 }),
+        )
+        .catch((err) =>
+          res.status(400).json({ message: err.message, resultCode: 2 }),
+        );
+      return;
     } else {
+      paymentService.fail(req.body.orderId).catch(() => null);
       return res.status(400).json({ message: result.message, resultCode: 1 });
     }
   } catch (err) {

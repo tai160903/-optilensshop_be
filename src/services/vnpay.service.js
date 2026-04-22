@@ -8,7 +8,7 @@ exports.createPaymentUrl = async (orderId, amount) => {
     vnpayHost: process.env.VNP_URL,
     testMode: true,
   });
-  const paymentUrl = await VNPay.createPaymentUrl({
+  const paymentUrl = await vnp.createPaymentUrl({
     vnp_Amount: amount,
     vnp_IpAddr: "127.0.0.1",
     vnp_TxnRef: orderId,

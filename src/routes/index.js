@@ -21,5 +21,6 @@ router.use("/momo", require("./momo"));
 router.use("/vnpay", require("./vnpay"));
 router.use("/payment", require("./payment"));
 router.use("/statistics", require("./statistics"));
+router.use("/inventory", require("./inventory"));
 
 module.exports = router;

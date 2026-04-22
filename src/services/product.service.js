@@ -33,7 +33,6 @@ function normalizeVariantFields(input = {}) {
 
 async function addVariant(productId, payload, user) {
   if (!productId) throw createHttpError("Thiếu productId", 400);
-  ensureValidObjectId(productId, "productId");
   const product = await Product.findById(productId);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
 
@@ -77,12 +76,6 @@ function buildSlug(name) {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-function ensureValidObjectId(id, fieldName) {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw createHttpError(`${fieldName} không hợp lệ`, 400);
-  }
 }
 
 async function listProducts(query = {}) {
@@ -272,9 +265,7 @@ async function listVariantsByType(query = {}) {
   const items = variants.map((row) => {
     const populated = row.product_id;
     const product =
-      populated &&
-      typeof populated === "object" &&
-      populated._id != null
+      populated && typeof populated === "object" && populated._id != null
         ? {
             _id: populated._id,
             name: populated.name,
@@ -306,7 +297,6 @@ async function getProductVariants(productId, query = {}) {
   if (!productId) {
     throw createHttpError("Thiếu productId", 400);
   }
-  ensureValidObjectId(productId, "productId");
 
   // filter by type + search
   const filters = { product_id: productId };
@@ -350,7 +340,6 @@ async function createProduct(payload, user) {
   if (!category || !name || images === undefined) {
     throw createHttpError("Thiếu thông tin bắt buộc", 400);
   }
-  ensureValidObjectId(category, "category");
   if (!Array.isArray(variants) || variants.length === 0) {
     throw createHttpError("Phải nhập ít nhất 1 biến thể cho sản phẩm", 400);
   }
@@ -417,7 +406,6 @@ async function createProduct(payload, user) {
 
 async function updateProduct(id, payload, user) {
   if (!id) throw createHttpError("Thiếu productId", 400);
-  ensureValidObjectId(id, "productId");
   const product = await Product.findById(id);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
 
@@ -452,7 +440,6 @@ async function updateProduct(id, payload, user) {
 
 async function deleteProduct(id, user) {
   if (!id) throw createHttpError("Thiếu productId", 400);
-  ensureValidObjectId(id, "productId");
   const product = await Product.findById(id);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   // Xóa tất cả biến thể liên quan
@@ -465,8 +452,6 @@ async function deleteProduct(id, user) {
 async function deleteVariant(productId, variantId, user) {
   if (!productId || !variantId)
     throw createHttpError("Thiếu productId hoặc variantId", 400);
-  ensureValidObjectId(productId, "productId");
-  ensureValidObjectId(variantId, "variantId");
   const product = await Product.findById(productId);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   const variant = await ProductVariant.findOne({
@@ -481,8 +466,6 @@ async function deleteVariant(productId, variantId, user) {
 async function updateVariant(productId, variantId, payload, user) {
   if (!productId || !variantId)
     throw createHttpError("Thiếu productId hoặc variantId", 400);
-  ensureValidObjectId(productId, "productId");
-  ensureValidObjectId(variantId, "variantId");
   const product = await Product.findById(productId);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   const variant = await ProductVariant.findOne({
@@ -495,8 +478,12 @@ async function updateVariant(productId, variantId, payload, user) {
   const update = {};
   if (payload.sku) update.sku = payload.sku;
   if (payload.price !== undefined) update.price = payload.price;
-  if (payload.stock_quantity !== undefined)
-    update.stock_quantity = payload.stock_quantity;
+  if (payload.stock_quantity !== undefined) {
+    throw createHttpError(
+      "Không cho phép cập nhật stock_quantity trực tiếp. Vui lòng tạo phiếu nhập kho.",
+      400,
+    );
+  }
   if (payload.images) update.images = payload.images;
   Object.assign(update, normalizeVariantFields(payload));
 
@@ -508,7 +495,6 @@ async function updateVariant(productId, variantId, payload, user) {
 
 async function toggleActiveProduct(id, user) {
   if (!id) throw createHttpError("Thiếu productId", 400);
-  ensureValidObjectId(id, "productId");
   const product = await Product.findById(id);
   if (!product) throw createHttpError("Không tìm thấy sản phẩm", 404);
   product.is_active = !product.is_active;

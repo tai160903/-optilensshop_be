@@ -30,20 +30,18 @@ const cartItemSchema = new Schema(
       ref: "Combo",
       default: null,
     },
+
     quantity: { type: Number, required: true, min: 1 },
     lens_params: { type: lensParamsSchema, default: null },
 
-    /** Giá tại thời điểm thêm vào giỏ — chống thay đổi giá giữa chừng */
     price_snapshot: { type: Number },
     combo_price_snapshot: { type: Number },
   },
   {
-    // Validator: phải có đúng 1 trong 2 (variant_id XOR combo_id)
     validate: {
       validator: function () {
         const hasVariant = !!this.variant_id;
         const hasCombo = !!this.combo_id;
-        // XOR: đúng khi chỉ một trong hai là true
         return hasVariant !== hasCombo;
       },
       message: "Cart item phải có đúng một trong hai: variant_id hoặc combo_id",

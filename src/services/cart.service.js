@@ -6,17 +6,26 @@ const { sanitizeLensParams } = require("../utils/lens-params");
 
 exports.getCartByUser = async (userId) => {
   let cart = await Cart.findOne({ user_id: userId })
-    .populate("items.variant_id", "name slug type images")
+    .populate({
+      path: "items.variant_id",
+      populate: { path: "product_id", select: "-_id name slug type images" },
+    })
     .populate({
       path: "items.combo_id",
       populate: [
         {
           path: "frame_variant_id",
-          populate: { path: "product_id", select: "name slug type images" },
+          populate: {
+            path: "product_id",
+            select: "-_id name slug type images",
+          },
         },
         {
           path: "lens_variant_id",
-          populate: { path: "product_id", select: "name slug type images" },
+          populate: {
+            path: "product_id",
+            select: "-_id name slug type images",
+          },
         },
       ],
     });
@@ -27,174 +36,215 @@ exports.getCartByUser = async (userId) => {
 };
 
 exports.addItem = async (userId, variant_id, quantity, lens_params) => {
-  const safeLensParams = sanitizeLensParams(lens_params);
-  if (!mongoose.Types.ObjectId.isValid(variant_id)) {
-    throw new Error("variant_id không hợp lệ");
-  }
-  const variant =
-    await ProductVariant.findById(variant_id).populate("product_id");
-  if (!variant) {
-    throw new Error("Không tìm thấy biến thể sản phẩm");
-  }
+  try {
+    const qty = Number(quantity);
+    if (!qty) throw new Error("Số lượng không hợp lệ");
 
-  // ── Validate stock_type ─────────────────────────────────────
-  // discontinued: không được thêm vào giỏ
-  if (variant.stock_type === "discontinued") {
-    throw new Error("Sản phẩm này đã ngừng kinh doanh");
-  }
+    const safeLensParams = sanitizeLensParams(lens_params);
 
-  let cart = await Cart.findOne({ user_id: userId });
-  if (!cart) {
-    cart = await Cart.create({ user_id: userId, items: [] });
-  }
+    // 1. Lấy variant
+    const variant = await ProductVariant.findOne({
+      _id: variant_id,
+      is_active: true,
+    }).populate("product_id");
 
-  const idxExisting = cart.items.findIndex(
-    (i) => i.variant_id && i.variant_id.toString() === variant_id,
-  );
-  let currentQty = Number(cart.items[idxExisting]?.quantity || 0);
-  const totalQty = currentQty + Number(quantity);
+    if (!variant) throw new Error("Không tìm thấy biến thể sản phẩm");
 
-  // ── in_stock: kiểm tra tồn kho ─────────────────────────────
-  if (variant.stock_type === "in_stock") {
-    const available = variant.available_quantity ?? variant.stock_quantity;
+    // 2. Lấy hoặc tạo cart
+    let cart = await Cart.findOne({ user_id: userId });
+    if (!cart) {
+      cart = await Cart.create({ user_id: userId, items: [] });
+    }
+
+    // 3. Tìm item trong cart
+    const item = cart.items.find(
+      (i) => i.variant_id?.toString() === variant_id,
+    );
+
+    const stock = Number(variant.stock_quantity || 0);
+    const reserved = Number(variant.reserved_quantity || 0);
+    const currentQty = Number(item?.quantity || 0);
+    const totalQty = currentQty + qty;
+
+    // 4. Kiểm tra tồn kho
+    const available = stock - reserved;
     if (totalQty > available) {
       throw new Error(`Số lượng vượt quá tồn kho (${available})`);
     }
-  }
-  // preorder: không check stock_quantity (đặt trước)
-  // → sẽ reserve khi checkout
 
-  if (idxExisting > -1) {
-    cart.items[idxExisting].quantity = totalQty;
-    if (safeLensParams) cart.items[idxExisting].lens_params = safeLensParams;
-    // Cập nhật price_snapshot nếu giá thay đổi (lấy giá mới nhất)
-    cart.items[idxExisting].price_snapshot = variant.price;
-  } else {
-    cart.items.push({
-      variant_id,
-      quantity: Number(quantity),
-      lens_params: safeLensParams,
-      price_snapshot: variant.price, // ← Lưu giá tại thời điểm thêm
-    });
+    // 5. Cập nhật cart item
+    if (item) {
+      item.quantity = totalQty;
+      if (safeLensParams) item.lens_params = safeLensParams;
+      item.price_snapshot = variant.price;
+    } else {
+      cart.items.push({
+        variant_id,
+        quantity: qty,
+        lens_params: safeLensParams,
+        price_snapshot: variant.price,
+      });
+    }
+
+    // 6. Save cart
+    cart.updated_at = new Date();
+    await cart.save();
+
+    return {
+      message: "Thêm sản phẩm vào giỏ hàng thành công",
+      cart,
+    };
+  } catch (error) {
+    throw new Error(error.message);
   }
-  cart.updated_at = new Date();
-  await cart.save();
-  return cart;
 };
 
 exports.addComboItem = async (userId, combo_id, quantity, lens_params) => {
-  const safeLensParams = sanitizeLensParams(lens_params);
-  if (!mongoose.Types.ObjectId.isValid(combo_id)) {
-    throw new Error("combo_id không hợp lệ");
-  }
-  const combo = await Combo.findOne({ _id: combo_id, is_active: true })
-    .populate("frame_variant_id")
-    .populate("lens_variant_id");
-  if (!combo) {
-    throw new Error("Không tìm thấy combo hoặc combo đã ngừng bán");
-  }
+  try {
+    const qty = Number(quantity);
+    if (!qty) throw new Error("Số lượng không hợp lệ");
 
-  const frame = combo.frame_variant_id;
-  const lens = combo.lens_variant_id;
-  if (!frame || !lens) {
-    throw new Error("Combo thiếu biến thể gọng hoặc tròng");
-  }
+    const safeLensParams = sanitizeLensParams(lens_params);
 
-  // ── Validate stock_type ─────────────────────────────────────
-  if (
-    frame.stock_type === "discontinued" ||
-    lens.stock_type === "discontinued"
-  ) {
-    throw new Error("Sản phẩm trong combo đã ngừng kinh doanh");
-  }
+    // 1. Lấy combo và 2 biến thể (gọng + tròng)
+    const combo = await Combo.findOne({
+      _id: combo_id,
+      is_active: true,
+      frame_variant_id: { $exists: true },
+      lens_variant_id: { $exists: true },
+    })
+      .populate({ path: "frame_variant_id", populate: { path: "product_id" } })
+      .populate({ path: "lens_variant_id", populate: { path: "product_id" } });
 
-  let cart = await Cart.findOne({ user_id: userId });
-  if (!cart) {
-    cart = await Cart.create({ user_id: userId, items: [] });
-  }
-
-  const idxExisting = cart.items.findIndex(
-    (i) => i.combo_id && i.combo_id.toString() === combo_id,
-  );
-  let currentQty = Number(cart.items[idxExisting]?.quantity || 0);
-  const totalQty = currentQty + Number(quantity);
-
-  // in_stock: kiểm tra tồn kho cho cả gọng và tròng
-  if (frame.stock_type === "in_stock") {
-    const fAvailable = frame.available_quantity ?? frame.stock_quantity;
-    if (totalQty > fAvailable) {
-      throw new Error(`Số lượng vượt tồn kho gọng (${fAvailable})`);
+    if (!combo) {
+      throw new Error("Không tìm thấy combo hoặc combo đã ngừng bán");
     }
-  }
-  if (lens.stock_type === "in_stock") {
-    const lAvailable = lens.available_quantity ?? lens.stock_quantity;
-    if (totalQty > lAvailable) {
-      throw new Error(`Số lượng vượt tồn kho tròng (${lAvailable})`);
-    }
-  }
-  // preorder: không check stock (đặt trước)
 
-  if (idxExisting > -1) {
-    cart.items[idxExisting].quantity = totalQty;
-    if (safeLensParams) cart.items[idxExisting].lens_params = safeLensParams;
-    // Cập nhật combo_price_snapshot nếu giá thay đổi
-    cart.items[idxExisting].combo_price_snapshot = combo.combo_price;
-  } else {
-    cart.items.push({
-      combo_id,
-      quantity: Number(quantity),
-      lens_params: safeLensParams,
-      combo_price_snapshot: combo.combo_price, // ← Lưu giá combo tại thời điểm thêm
-    });
+    const frame = combo.frame_variant_id;
+    const lens = combo.lens_variant_id;
+    if (!frame || !lens) {
+      throw new Error("Combo thiếu biến thể gọng hoặc tròng");
+    }
+
+    // 2. Lấy hoặc tạo cart
+    let cart = await Cart.findOne({ user_id: userId });
+    if (!cart) {
+      cart = await Cart.create({ user_id: userId, items: [] });
+    }
+
+    // 3. Tìm item combo trong cart
+    const item = cart.items.find((i) => i.combo_id?.toString() === combo_id);
+    const currentQty = Number(item?.quantity || 0);
+    const totalQty = currentQty + qty;
+
+    // 4. Kiểm tra tồn kho cho từng biến thể
+    const frameStock = Number(frame.stock_quantity || 0);
+    const frameReserved = Number(frame.reserved_quantity || 0);
+    const frameAvailable =
+      typeof frame.available_quantity === "number"
+        ? Number(frame.available_quantity)
+        : Math.max(0, frameStock - frameReserved);
+
+    const lensStock = Number(lens.stock_quantity || 0);
+    const lensReserved = Number(lens.reserved_quantity || 0);
+    const lensAvailable =
+      typeof lens.available_quantity === "number"
+        ? Number(lens.available_quantity)
+        : Math.max(0, lensStock - lensReserved);
+
+    if (totalQty > frameAvailable) {
+      throw new Error(`Số lượng vượt tồn kho gọng (${frameAvailable})`);
+    }
+
+    if (totalQty > lensAvailable) {
+      throw new Error(`Số lượng vượt tồn kho tròng (${lensAvailable})`);
+    }
+
+    // 5. Cập nhật combo item trong cart
+    if (item) {
+      item.quantity = totalQty;
+      if (safeLensParams) item.lens_params = safeLensParams;
+      item.combo_price_snapshot = combo.combo_price;
+    } else {
+      cart.items.push({
+        combo_id,
+        quantity: qty,
+        lens_params: safeLensParams,
+        combo_price_snapshot: combo.combo_price,
+      });
+    }
+
+    // 6. Save cart
+    cart.updated_at = new Date();
+    await cart.save();
+
+    return {
+      message: "Thêm combo vào giỏ hàng thành công",
+      cart,
+    };
+  } catch (error) {
+    throw new Error(error.message);
   }
-  cart.updated_at = new Date();
-  await cart.save();
-  return cart;
 };
 
 exports.updateItem = async (userId, variant_id, quantity, lens_params) => {
   const safeLensParams = sanitizeLensParams(lens_params);
-  if (!mongoose.Types.ObjectId.isValid(variant_id)) {
-    throw new Error("variant_id không hợp lệ");
-  }
-  const variant =
-    await ProductVariant.findById(variant_id).populate("product_id");
-  if (!variant) {
-    throw new Error("Không tìm thấy biến thể sản phẩm");
-  }
-  if (variant.stock_type === "discontinued") {
-    throw new Error("Sản phẩm này đã ngừng kinh doanh");
-  }
+  const newQty = Number(quantity);
+  if (newQty < 0) throw new Error("Số lượng không hợp lệ");
+
+  const variant = await ProductVariant.findOne({
+    _id: variant_id,
+    is_active: true,
+  }).populate("product_id");
+  if (!variant) throw new Error("Không tìm thấy biến thể sản phẩm");
+
+  // 2. Lấy cart và tìm item cần update
   const cart = await Cart.findOne({ user_id: userId });
   if (!cart) return null;
-  const idx = cart.items.findIndex(
+
+  const cartItem = cart.items.find(
     (i) => i.variant_id && i.variant_id.toString() === variant_id,
   );
-  if (idx > -1) {
-    if (variant.stock_type === "in_stock") {
-      const available = variant.available_quantity ?? variant.stock_quantity;
-      if (Number(quantity) > available) {
-        throw new Error(`Số lượng vượt quá tồn kho (${available})`);
-      }
-    }
-    cart.items[idx].quantity = quantity;
-    if (safeLensParams) cart.items[idx].lens_params = safeLensParams;
-    cart.items[idx].price_snapshot = variant.price; // cập nhật giá mới nhất
-    cart.updated_at = new Date();
-    await cart.save();
-    return cart;
+  if (!cartItem) return null;
+
+  // 3. Kiểm tra tồn kho
+  const currentStock = Number(variant.stock_quantity || 0);
+  const currentReserved = Number(variant.reserved_quantity || 0);
+  const available =
+    typeof variant.available_quantity === "number"
+      ? Number(variant.available_quantity)
+      : Math.max(0, currentStock - currentReserved);
+
+  if (newQty > available) {
+    throw new Error(`Số lượng vượt quá tồn kho (${available})`);
   }
-  return null;
+
+  cartItem.quantity = newQty;
+  if (safeLensParams) cartItem.lens_params = safeLensParams;
+  cartItem.price_snapshot = variant.price;
+
+  cart.updated_at = new Date();
+  await cart.save();
+
+  return cart;
 };
 
 exports.updateComboItem = async (userId, combo_id, quantity, lens_params) => {
   const safeLensParams = sanitizeLensParams(lens_params);
+  const newQty = Number(quantity);
+  if (newQty < 0) throw new Error("Số lượng không hợp lệ");
   if (!mongoose.Types.ObjectId.isValid(combo_id)) {
     throw new Error("combo_id không hợp lệ");
   }
-  const combo = await Combo.findOne({ _id: combo_id, is_active: true })
-    .populate("frame_variant_id")
-    .populate("lens_variant_id");
+
+  const combo = await Combo.findOne({
+    _id: combo_id,
+    is_active: true,
+    frame_variant_id: { $exists: true },
+    lens_variant_id: { $exists: true },
+  })
+    .populate({ path: "frame_variant_id", populate: { path: "product_id" } })
+    .populate({ path: "lens_variant_id", populate: { path: "product_id" } });
   if (!combo) {
     throw new Error("Không tìm thấy combo hoặc combo đã ngừng bán");
   }
@@ -203,39 +253,50 @@ exports.updateComboItem = async (userId, combo_id, quantity, lens_params) => {
   if (!frame || !lens) {
     throw new Error("Combo thiếu biến thể gọng hoặc tròng");
   }
-  if (
-    frame.stock_type === "discontinued" ||
-    lens.stock_type === "discontinued"
-  ) {
-    throw new Error("Sản phẩm trong combo đã ngừng kinh doanh");
-  }
+
+  // 2. Lấy cart và tìm combo item cần update
   const cart = await Cart.findOne({ user_id: userId });
   if (!cart) return null;
-  const idx = cart.items.findIndex(
+
+  const item = cart.items.find(
     (i) => i.combo_id && i.combo_id.toString() === combo_id,
   );
-  if (idx > -1) {
-    const q = Number(quantity);
-    if (frame.stock_type === "in_stock") {
-      const fAvailable = frame.available_quantity ?? frame.stock_quantity;
-      if (q > fAvailable) {
-        throw new Error(`Số lượng vượt tồn kho gọng (${fAvailable})`);
-      }
-    }
-    if (lens.stock_type === "in_stock") {
-      const lAvailable = lens.available_quantity ?? lens.stock_quantity;
-      if (q > lAvailable) {
-        throw new Error(`Số lượng vượt tồn kho tròng (${lAvailable})`);
-      }
-    }
-    cart.items[idx].quantity = q;
-    if (safeLensParams) cart.items[idx].lens_params = safeLensParams;
-    cart.items[idx].combo_price_snapshot = combo.combo_price; // cập nhật giá mới nhất
-    cart.updated_at = new Date();
-    await cart.save();
-    return cart;
+  if (!item) return null;
+
+  // 3. Kiểm tra tồn kho của từng biến thể trong combo
+  const frameAvailable =
+    typeof frame.available_quantity === "number"
+      ? Number(frame.available_quantity)
+      : Math.max(
+          0,
+          Number(frame.stock_quantity || 0) -
+            Number(frame.reserved_quantity || 0),
+        );
+  const lensAvailable =
+    typeof lens.available_quantity === "number"
+      ? Number(lens.available_quantity)
+      : Math.max(
+          0,
+          Number(lens.stock_quantity || 0) -
+            Number(lens.reserved_quantity || 0),
+        );
+  if (newQty > frameAvailable) {
+    throw new Error(`Số lượng vượt tồn kho gọng (${frameAvailable})`);
   }
-  return null;
+  if (newQty > lensAvailable) {
+    throw new Error(`Số lượng vượt tồn kho tròng (${lensAvailable})`);
+  }
+
+  // 4. Cập nhật combo item trong cart
+  item.quantity = newQty;
+  if (safeLensParams) item.lens_params = safeLensParams;
+  item.combo_price_snapshot = combo.combo_price;
+
+  // 5. Save cart
+  cart.updated_at = new Date();
+  await cart.save();
+
+  return cart;
 };
 
 exports.removeItem = async (userId, variant_id) => {

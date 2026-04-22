@@ -28,6 +28,14 @@ router.post(
   orderController.checkout,
 );
 
+// Customer preorder ngay (không qua giỏ hàng)
+router.post(
+  "/preorder-now",
+  authMiddleware.authenticate,
+  authMiddleware.authorize(["customer"]),
+  orderController.preorderNow,
+);
+
 // Sale xác nhận đơn hàng
 router.post(
   "/:id/confirm",

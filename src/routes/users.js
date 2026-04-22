@@ -14,5 +14,7 @@ router.put(
   upload.single("avatar"),
   userController.updateMyProfile,
 );
+router.get("/me/addresses", authenticate, userController.getMyAddresses);
+router.post("/me/addresses", authenticate, userController.addMyAddress);
 
 module.exports = router;
