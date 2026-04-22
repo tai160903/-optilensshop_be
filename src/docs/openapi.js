@@ -99,11 +99,22 @@ function getOpenApiSpec() {
         },
         AddressBody: {
           type: "object",
-          required: ["full_name", "phone", "address"],
+          required: ["address"],
           properties: {
-            full_name: { type: "string" },
-            phone: { type: "string" },
-            address: { type: "string" },
+            address: {
+              oneOf: [
+                { type: "string" },
+                {
+                  type: "object",
+                  properties: {
+                    street: { type: "string" },
+                    ward: { type: "string" },
+                    district: { type: "string" },
+                    city: { type: "string" },
+                  },
+                },
+              ],
+            },
           },
         },
         ProductVariantBody: {
@@ -281,8 +292,8 @@ function getOpenApiSpec() {
                   type: "object",
                   properties: {
                     avatar: { type: "string", format: "binary" },
-                    first_name: { type: "string" },
-                    last_name: { type: "string" },
+                    full_name: { type: "string" },
+                    phone: { type: "string" },
                     dob: { type: "string", format: "date" },
                     gender: {
                       type: "string",

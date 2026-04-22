@@ -5,6 +5,7 @@ const {
   sendStaffDeletedEmail,
 } = require("./mail.service");
 const { createHttpError } = require("../utils/create-http-error");
+const { addressToString } = require("../utils/address");
 const mongoose = require("mongoose");
 const ALLOWED_STAFF_ROLES = ["sales", "operations"];
 const ALLOWED_MANAGER_ROLE = "manager";
@@ -38,7 +39,8 @@ function sanitizeUser(user) {
 async function getMyProfile(userId) {
   if (!userId) throw createHttpError("Thiếu thông tin người dùng", 401);
   const user = await User.findById(userId).select("-password");
-  if (!user || user.is_deleted) throw createHttpError("Không tìm thấy người dùng", 404);
+  if (!user || user.is_deleted)
+    throw createHttpError("Không tìm thấy người dùng", 404);
   return sanitizeUser(user);
 }
 
@@ -61,8 +63,10 @@ async function updateMyProfile(userId, payload = {}) {
     }
     const date = new Date(payload.dob);
     const isValidDate =
-      !isNaN(date.getTime()) && String(payload.dob) === date.toISOString().slice(0, 10);
-    if (!isValidDate) throw createHttpError("Ngày sinh không phải ngày hợp lệ", 400);
+      !isNaN(date.getTime()) &&
+      String(payload.dob) === date.toISOString().slice(0, 10);
+    if (!isValidDate)
+      throw createHttpError("Ngày sinh không phải ngày hợp lệ", 400);
   }
 
   if (payload.gender !== undefined && payload.gender !== null) {
@@ -73,12 +77,16 @@ async function updateMyProfile(userId, payload = {}) {
 
   if (payload.phone !== undefined) {
     const normalizedPhone = String(payload.phone || "").trim();
-    if (!normalizedPhone) throw createHttpError("Số điện thoại là bắt buộc", 400);
+    if (!normalizedPhone)
+      throw createHttpError("Số điện thoại là bắt buộc", 400);
     profileUpdates["profile.phone"] = normalizedPhone;
   }
 
   if (payload.avatar_file && payload.avatar_file.buffer) {
-    const uploadedAvatar = await uploadAvatar(payload.avatar_file.buffer, userId);
+    const uploadedAvatar = await uploadAvatar(
+      payload.avatar_file.buffer,
+      userId,
+    );
     profileUpdates["profile.avatar"] = uploadedAvatar.url;
   }
 
@@ -107,8 +115,11 @@ async function getMyAddresses(userId) {
 
 async function addMyAddress(userId, payload = {}) {
   if (!userId) throw createHttpError("Thiếu thông tin người dùng", 401);
-  const rawAddress = typeof payload.address === "string" ? payload.address : "";
-  const address = rawAddress.trim();
+  const rawAddress =
+    typeof payload.address === "object" && payload.address !== null
+      ? addressToString(payload.address)
+      : payload.address;
+  const address = String(rawAddress || "").trim();
   if (!address) throw createHttpError("Thiếu thông tin địa chỉ", 400);
 
   const user = await User.findOne({ _id: userId, is_deleted: false });
@@ -131,15 +142,27 @@ async function listStaff() {
   return users.map(sanitizeUser);
 }
 
-async function createStaff({ email, password, role, status = "active", phone }) {
-  if (!email || !password) throw createHttpError("Email và password là bắt buộc", 400);
-  if (!ALLOWED_STAFF_ROLES.includes(role)) throw createHttpError("Role staff không hợp lệ", 400);
+async function createStaff({
+  email,
+  password,
+  role,
+  status = "active",
+  phone,
+}) {
+  if (!email || !password)
+    throw createHttpError("Email và password là bắt buộc", 400);
+  if (!ALLOWED_STAFF_ROLES.includes(role))
+    throw createHttpError("Role staff không hợp lệ", 400);
 
   const normalizedEmail = String(email).trim().toLowerCase();
   const normalizedPhone = String(phone || "").trim();
-  if (!normalizedPhone) throw createHttpError("Phone là bắt buộc theo schema", 400);
+  if (!normalizedPhone)
+    throw createHttpError("Phone là bắt buộc theo schema", 400);
 
-  const exists = await User.findOne({ email: normalizedEmail, is_deleted: false });
+  const exists = await User.findOne({
+    email: normalizedEmail,
+    is_deleted: false,
+  });
   if (exists) throw createHttpError("Email đã tồn tại", 409);
 
   const bcrypt = require("bcrypt");
@@ -228,12 +251,17 @@ async function listManagers() {
 }
 
 async function createManager({ email, password, status = "active", phone }) {
-  if (!email || !password) throw createHttpError("Email và password là bắt buộc", 400);
+  if (!email || !password)
+    throw createHttpError("Email và password là bắt buộc", 400);
   const normalizedEmail = String(email).trim().toLowerCase();
   const normalizedPhone = String(phone || "").trim();
-  if (!normalizedPhone) throw createHttpError("Phone là bắt buộc theo schema", 400);
+  if (!normalizedPhone)
+    throw createHttpError("Phone là bắt buộc theo schema", 400);
 
-  const exists = await User.findOne({ email: normalizedEmail, is_deleted: false });
+  const exists = await User.findOne({
+    email: normalizedEmail,
+    is_deleted: false,
+  });
   if (exists) throw createHttpError("Email đã tồn tại", 409);
 
   const bcrypt = require("bcrypt");
