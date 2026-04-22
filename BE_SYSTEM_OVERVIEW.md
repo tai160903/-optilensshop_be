@@ -14,6 +14,7 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 ### 2.1 Identity / User
 
 `User` (`src/models/user.schema.js`)
+
 - email (unique), password
 - role: `customer | sales | operations | manager | admin`
 - status: `active | inactive | banned | pending`
@@ -24,20 +25,25 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 ### 2.2 Catalog
 
 `Category` (`src/models/category.schema.js`)
+
 - name, slug(unique), parent_id, is_active
 
 `Brand` (`src/models/brand.schema.js`)
+
 - name(unique), description, logo, is_active
 
 `Model` (`src/models/model.schema.js`)
+
 - name(unique), type(`frame|lens`), description, is_active
 
 `Product` (`src/models/product.schema.js`)
+
 - category(ref Category), brand(ref Brand), model(ref Model)
 - name, slug(unique), type(`frame|lens|accessory`)
 - material, gender, shape, images[], is_active
 
 `ProductVariant` (`src/models/productVariant.schema.js`)
+
 - product_id(ref Product), sku(unique), price
 - stock_quantity, reserved_quantity, is_active
 - frame attrs: size, bridge_fit
@@ -45,17 +51,20 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 - virtual `available_quantity = max(0, stock_quantity - reserved_quantity)`
 
 `Combo` (`src/models/combo.schema.js`)
+
 - frame_variant_id(ref ProductVariant), lens_variant_id(ref ProductVariant)
 - combo_price, name, slug(unique), is_active
 
 ### 2.3 Cart & Order
 
 `Cart` (`src/models/cart.schema.js`)
+
 - user_id(unique, ref User)
-- items[]: variant_id xor combo_id, quantity, lens_params
+- items[]: moi dong cart co `_id` rieng (cart line ID), gom variant_id xor combo_id, quantity, lens_params
 - snapshot gia: `price_snapshot`, `combo_price_snapshot`
 
 `Order` (`src/models/order.schema.js`)
+
 - user_id, order_type: `stock | pre_order | prescription`
 - status:
   - `pending, confirmed, processing, manufacturing, packed, shipped, delivered, completed, cancelled, return_requested, returned, refunded`
@@ -65,18 +74,21 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 - shipping_address, cancel_reason, reject_reason
 
 `OrderItem` (`src/models/orderItem.schema.js`)
+
 - order_id, variant_id, quantity, unit_price
 - lens_params (cho prescription)
 - combo_id, combo_group_id (neu sinh tu combo)
 - item_type: `frame | lens | null`
 
 `PrescriptionOrder` (`src/models/prescriptionOrder.schema.js`)
+
 - order_id + thong so do mat (SPH/CYL/AXIS/ADD/PD...)
 - prescription_image, optometrist_name, clinic_name
 
 ### 2.4 Payment
 
 `Payment` (`src/models/payment.schema.js`)
+
 - order_id, amount, method(`cod|momo|vnpay`)
 - status:
   - `pending, pending-payment, deposit-paid, remaining-due, paid, failed, refunded`
@@ -85,11 +97,13 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 ### 2.5 Inventory
 
 `InventoryReceipt` (`src/models/inventoryReceipt.schema.js`)
+
 - variant_id, qty_in, unit_cost, supplier_name, note
 - status: `draft | confirmed | cancelled`
 - created_by, confirmed_by, confirmed_at
 
 `InventoryLedger` (`src/models/inventoryLedger.schema.js`)
+
 - variant_id, event_type:
   - `receipt_confirmed, manual_adjustment, order_reserve, order_release, order_deduct`
 - quantity_delta
@@ -113,6 +127,7 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 ## 4) API map theo nhom
 
 ## 4.1 Auth (`/auth`)
+
 - `POST /register`
 - `POST /login`
 - `GET /verify-email`
@@ -122,18 +137,21 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 - `POST /change-password` (auth)
 
 ## 4.2 Users (`/users`)
+
 - `GET /me/profile` (auth)
 - `PUT /me/profile` (auth, multipart avatar)
 - `GET /me/addresses` (auth)
 - `POST /me/addresses` (auth)
 
 ## 4.3 Management (`/management`)
+
 - Staff (manager/admin):
   - `GET /staff`, `POST /staff`, `PUT /staff/:id`, `DELETE /staff/:id`
 - Manager (admin):
   - `GET /managers`, `POST /managers`, `PUT /managers/:id`, `DELETE /managers/:id`
 
 ## 4.4 Catalog
+
 - Products:
   - `GET /products`, `GET /products/:slug`, `GET /products/:id/variants`
   - `POST /products`, `PUT /products/:id`, `DELETE /products/:id` (manager/admin)
@@ -151,15 +169,19 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
   - `GET/POST/PUT/DELETE /models`
 
 ## 4.5 Cart (`/cart`)
+
 - `GET /`
 - `POST /items`
-- `PUT /items/:id`
-- `DELETE /items/:id`
+- `PUT /items/:cartLineId` (cap nhat theo `_id` cua dong hang trong cart)
+- `DELETE /items/:cartLineId` (xoa theo `_id` cua dong hang trong cart)
 - `PUT /combo-items/:combo_id`
 - `DELETE /combo-items/:combo_id`
 - `DELETE /clear`
+- Response da duoc chuan hoa ve dang:
+  - `{ success: true, items: [...], totalAmount }`
 
 ## 4.6 Orders (`/orders`)
+
 - `GET /` (customer list)
 - `GET /all` (sales/manager/operations/admin)
 - `GET /:id` (owner hoac privileged role)
@@ -170,6 +192,7 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 - `PUT /:id/status` (operations)
 
 ## 4.7 Payment gateways
+
 - Payment endpoint:
   - `GET /payment/success` (auth)
   - `GET /payment/fail` (auth)
@@ -182,6 +205,7 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
   - `GET /vnpay/verify`
 
 ## 4.8 Statistics (`/statistics`)
+
 - `GET /overview` (manager/admin)
 - `GET /admin` (admin)
 - `GET /timeseries` (manager/admin)
@@ -190,6 +214,7 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 - `GET /funnel` (manager/admin)
 
 ## 4.9 Inventory (`/inventory`)
+
 - `GET /receipts` (manager/admin)
 - `POST /receipts` (manager/admin)
 - `PATCH /receipts/:id/confirm` (manager/admin)
@@ -198,12 +223,14 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 ## 5) Luong nghiep vu end-to-end
 
 ### 5.1 Dang ky -> xac thuc -> dang nhap
+
 1. User `POST /auth/register`
 2. System tao user + token verify + gui mail
 3. User click `GET /auth/verify-email?token=...`
 4. User `POST /auth/login` de lay JWT
 
 ### 5.2 Cart -> Checkout (stock/preorder/prescription)
+
 1. Customer thao tac gio (`/cart/*`)
 2. Customer `POST /orders/checkout`
 3. `order.service`:
@@ -215,26 +242,37 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 4. Neu `payment_method = momo/vnpay` -> tra `payUrl`
 
 ### 5.3 Preorder ngay (khong qua cart)
+
 1. Customer `POST /orders/preorder-now`
 2. Service validate item preorder, reserve variant
 3. Tao `Order`, `OrderItem`, `Payment`
 4. Tra `payUrl` neu online payment
 
 ### 5.4 Xac nhan va van hanh don
+
 1. Sales `POST /orders/:id/confirm`
 2. Operations `PUT /orders/:id/status`
 3. Theo status transition, system cap nhat inventory va payment (COD) theo rule trong `order.service`
 4. Customer co the `PUT /orders/:id/cancel` neu hop le
 
 ### 5.5 Thanh toan online
+
 1. Tao URL thanh toan:
    - MoMo (`/momo/create`) hoac VNPay (`/vnpay/create`)
 2. Gateway callback:
    - MoMo: return + ipn
    - VNPay: verify
 3. System cap nhat `Payment.status` (va mot phan `Order.payment_phase`)
+4. Co cleanup job dinh ky cho cac don online bi tre:
+   - `pending-payment` qua han -> danh dau payment `failed` + cancel order
+   - Job: `src/jobs/pending-payment-cleanup.job.js`
+   - Config qua env:
+     - `ENABLE_PENDING_PAYMENT_CLEANUP`
+     - `PENDING_PAYMENT_TIMEOUT_MINUTES`
+     - `PENDING_PAYMENT_CLEANUP_INTERVAL_MINUTES`
 
 ### 5.6 Nhap kho va ledger
+
 1. Manager/Admin tao phieu nhap `POST /inventory/receipts` (draft)
 2. Xac nhan phieu `PATCH /inventory/receipts/:id/confirm`
 3. Transaction:
@@ -244,6 +282,7 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 4. Theo doi qua `GET /inventory/receipts` va `GET /inventory/ledger`
 
 ### 5.7 Thong ke
+
 1. Manager/Admin goi cac endpoint `/statistics/*`
 2. `statistics.service` aggregate truc tiep tu `Order`, `Payment`, `User`, `OrderItem`, `ProductVariant`
 
@@ -267,6 +306,7 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
   - order: `src/services/order.service.js`
   - cart: `src/services/cart.service.js`
   - payment: `src/services/payment.service.js`
+  - jobs: `src/jobs/pending-payment-cleanup.job.js`
   - gateways: `src/services/momo.service.js`, `src/services/vnpay.service.js`
   - inventory: `src/services/inventory.service.js`
   - statistics: `src/services/statistics.service.js`
@@ -277,4 +317,3 @@ Tai lieu nay tong hop nhanh cac thanh phan chinh cua backend: schema, API, role,
 - Co mot so logic overlap giua `order.service`, `payment.service`, `vnpay.service` trong cap nhat payment status.
 - Inventory ledger hien ghi day du cho flow receipt; flow order dang mutate stock/reserved nhieu trong `order.service`.
 - Nen coi file nay la "ban do he thong", va OpenAPI la "contract API". Khi thay doi route/schema, cap nhat ca hai.
-

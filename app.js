@@ -13,6 +13,9 @@ var cors = require("cors");
 var indexRouter = require("./src/routes/index");
 const swaggerUi = require("swagger-ui-express");
 const getOpenApiSpec = require("./src/docs/openapi");
+const {
+  startPendingPaymentCleanupJob,
+} = require("./src/jobs/pending-payment-cleanup.job");
 
 var app = express();
 app.use(
@@ -26,6 +29,7 @@ app.use(
 
 // Kết nối MongoDB
 connectDB();
+startPendingPaymentCleanupJob();
 app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

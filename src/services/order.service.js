@@ -16,23 +16,48 @@ function normalizePhone(phone) {
 exports.checkoutWithPayment = async (userId, orderData) => {
   const order = await exports.createOrderFromCart(userId, orderData);
   let payUrl = null;
-  if (
-    orderData.payment_method === "momo" &&
-    Number(order.payment_due_now) > 0
-  ) {
-    const momoRes = await momoService.createMomoPayment({
-      amount: order.payment_due_now ?? order.final_amount,
-      orderId: order._id.toString(),
-      orderInfo: `Thanh toán đơn hàng #${order._id}`,
-      redirectUrl: process.env.MOMO_REDIRECT_URL,
-      ipnUrl: process.env.MOMO_IPN_URL,
-    });
-    payUrl = momoRes.payUrl || momoRes.deeplink || null;
-  } else if (orderData.payment_method === "vnpay") {
-    payUrl = await vnpayService.createPaymentUrl(
-      order._id.toString(),
-      order.payment_due_now ?? order.final_amount,
-    );
+  try {
+    if (
+      orderData.payment_method === "momo" &&
+      Number(order.payment_due_now) > 0
+    ) {
+      const momoRes = await momoService.createMomoPayment({
+        amount: order.payment_due_now ?? order.final_amount,
+        orderId: order._id.toString(),
+        orderInfo: `Thanh toán đơn hàng #${order._id}`,
+        redirectUrl: process.env.MOMO_REDIRECT_URL,
+        ipnUrl: process.env.MOMO_IPN_URL,
+      });
+      payUrl = momoRes.payUrl || momoRes.deeplink || null;
+      if (!payUrl) {
+        throw new Error("MoMo không trả về đường dẫn thanh toán");
+      }
+    } else if (orderData.payment_method === "vnpay") {
+      payUrl = await vnpayService.createPaymentUrl(
+        order._id.toString(),
+        order.payment_due_now ?? order.final_amount,
+      );
+      if (!payUrl) {
+        throw new Error("VNPay không trả về đường dẫn thanh toán");
+      }
+    }
+  } catch (error) {
+    if (["momo", "vnpay"].includes(orderData.payment_method)) {
+      await Payment.updateOne(
+        { order_id: order._id, status: "pending-payment" },
+        { $set: { status: "failed" } },
+      );
+      try {
+        await exports.cancelOrder(
+          order._id,
+          userId,
+          "Khởi tạo thanh toán online thất bại",
+        );
+      } catch (_) {
+        // no-op: ưu tiên trả lỗi gốc khởi tạo thanh toán
+      }
+    }
+    throw error;
   }
   return { order, payUrl };
 };
@@ -40,23 +65,48 @@ exports.checkoutWithPayment = async (userId, orderData) => {
 exports.createPreorderDirectWithPayment = async (userId, orderData) => {
   const order = await exports.createPreorderDirect(userId, orderData);
   let payUrl = null;
-  if (
-    orderData.payment_method === "momo" &&
-    Number(order.payment_due_now) > 0
-  ) {
-    const momoRes = await momoService.createMomoPayment({
-      amount: order.payment_due_now ?? order.final_amount,
-      orderId: order._id.toString(),
-      orderInfo: `Thanh toán đơn hàng #${order._id}`,
-      redirectUrl: process.env.MOMO_REDIRECT_URL,
-      ipnUrl: process.env.MOMO_IPN_URL,
-    });
-    payUrl = momoRes.payUrl || momoRes.deeplink || null;
-  } else if (orderData.payment_method === "vnpay") {
-    payUrl = await vnpayService.createPaymentUrl(
-      order._id.toString(),
-      order.payment_due_now ?? order.final_amount,
-    );
+  try {
+    if (
+      orderData.payment_method === "momo" &&
+      Number(order.payment_due_now) > 0
+    ) {
+      const momoRes = await momoService.createMomoPayment({
+        amount: order.payment_due_now ?? order.final_amount,
+        orderId: order._id.toString(),
+        orderInfo: `Thanh toán đơn hàng #${order._id}`,
+        redirectUrl: process.env.MOMO_REDIRECT_URL,
+        ipnUrl: process.env.MOMO_IPN_URL,
+      });
+      payUrl = momoRes.payUrl || momoRes.deeplink || null;
+      if (!payUrl) {
+        throw new Error("MoMo không trả về đường dẫn thanh toán");
+      }
+    } else if (orderData.payment_method === "vnpay") {
+      payUrl = await vnpayService.createPaymentUrl(
+        order._id.toString(),
+        order.payment_due_now ?? order.final_amount,
+      );
+      if (!payUrl) {
+        throw new Error("VNPay không trả về đường dẫn thanh toán");
+      }
+    }
+  } catch (error) {
+    if (["momo", "vnpay"].includes(orderData.payment_method)) {
+      await Payment.updateOne(
+        { order_id: order._id, status: "pending-payment" },
+        { $set: { status: "failed" } },
+      );
+      try {
+        await exports.cancelOrder(
+          order._id,
+          userId,
+          "Khởi tạo thanh toán online thất bại",
+        );
+      } catch (_) {
+        // no-op: ưu tiên trả lỗi gốc khởi tạo thanh toán
+      }
+    }
+    throw error;
   }
   return { order, payUrl };
 };
@@ -371,8 +421,8 @@ exports.createOrderFromCart = async (userId, orderData) => {
   try {
     session.startTransaction();
 
-    // 1. Lấy cart
-    let cart = await Cart.findOne({ user_id: userId })
+    // 1) Lấy cart
+    const cart = await Cart.findOne({ user_id: userId })
       .session(session)
       .populate({
         path: "items.combo_id",
@@ -392,7 +442,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
 
     if (!cart || !cart.items.length) throw new Error("Giỏ hàng trống");
 
-    // 2. Chọn items checkout
+    // 2) Chọn items checkout + normalize
     const selectedItems =
       Array.isArray(orderData.items) && orderData.items.length
         ? orderData.items
@@ -408,7 +458,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
       lens_params: sanitizeLensParams(item.lens_params),
     }));
 
-    // 3. Detect order_type: prescription > pre_order > stock
+    // 3) Detect order_type: prescription > pre_order > stock
     let order_type = "stock";
 
     for (const sel of normalizedSelectedItems) {
@@ -490,7 +540,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
       }
     }
 
-    // 4. Validate stock và build itemsToOrder
+    // 4) Validate stock và build itemsToOrder
     const itemsToOrder = [];
     let total = 0;
 
@@ -595,7 +645,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
       }
     }
 
-    // 5. Chuẩn hóa địa chỉ giao hàng
+    // 5) Chuẩn hóa địa chỉ giao hàng
     let shippingAddressStr = "";
     if (
       orderData.shipping_address &&
@@ -610,7 +660,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
       throw new Error("Thiếu số điện thoại");
     }
 
-    // 6. Tính phí ship và payment breakdown
+    // 6) Tính phí ship và payment breakdown
     let shipping_fee = 0;
     if (orderData.shipping_method === "ship") {
       const freeShippingMin = Number(process.env.FREE_SHIPPING_MIN || 0);
@@ -640,24 +690,29 @@ exports.createOrderFromCart = async (userId, orderData) => {
     let payment_due_now = 0;
     let payment_phase = "full";
 
-    if (order_type === "pre_order" && orderData.payment_method === "cod") {
-      deposit_amount = 0;
-      remaining_amount = final_amount;
-      payment_due_now = 0;
-      payment_phase = "remaining";
-    } else if (order_type === "pre_order") {
-      deposit_amount = Math.round(final_amount * depositRate);
-      remaining_amount = final_amount - deposit_amount;
-      payment_due_now = deposit_amount;
-      payment_phase = "deposit";
-    } else {
-      deposit_amount = final_amount;
-      remaining_amount = 0;
-      payment_due_now = final_amount;
-      payment_phase = "full";
+    switch (order_type) {
+      case "pre_order":
+        if (orderData.payment_method === "cod") {
+          deposit_amount = 0;
+          remaining_amount = final_amount;
+          payment_due_now = 0;
+          payment_phase = "remaining";
+        } else {
+          deposit_amount = Math.round(final_amount * depositRate);
+          remaining_amount = final_amount - deposit_amount;
+          payment_due_now = deposit_amount;
+          payment_phase = "deposit";
+        }
+        break;
+      default:
+        deposit_amount = final_amount;
+        remaining_amount = 0;
+        payment_due_now = final_amount;
+        payment_phase = "full";
+        break;
     }
 
-    // 7. Tạo order
+    // 7) Tạo order
     const order = new Order({
       user_id: userId,
       order_type,
@@ -677,7 +732,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
     });
     await order.save({ session });
 
-    // 8. Tạo order items
+    // 8) Tạo order items
     for (const item of itemsToOrder) {
       if (item.kind === "combo") {
         await new OrderItem({
@@ -721,7 +776,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
       }
     }
 
-    // 9. Tạo prescription records nếu cần
+    // 9) Tạo prescription records nếu cần
     if (order_type === "prescription") {
       const prescriptionItems = itemsToOrder.filter(
         (i) => i.lens_params && Object.keys(i.lens_params).length > 0,
@@ -752,15 +807,20 @@ exports.createOrderFromCart = async (userId, orderData) => {
       }
     }
 
-    // 10. Tạo payment record
+    // 10) Tạo payment record
     let paymentStatus = "pending";
-    if (orderData.payment_method === "cod") {
-      paymentStatus =
-        payment_phase === "remaining" ? "remaining-due" : "pending";
-    } else if (payment_due_now > 0) {
-      paymentStatus = "pending-payment";
-    } else if (remaining_amount > 0) {
-      paymentStatus = "remaining-due";
+    switch (orderData.payment_method) {
+      case "cod":
+        paymentStatus =
+          payment_phase === "remaining" ? "remaining-due" : "pending";
+        break;
+      default:
+        if (payment_due_now > 0) {
+          paymentStatus = "pending-payment";
+        } else if (remaining_amount > 0) {
+          paymentStatus = "remaining-due";
+        }
+        break;
     }
 
     await new Payment({
@@ -770,10 +830,11 @@ exports.createOrderFromCart = async (userId, orderData) => {
       status: paymentStatus,
     }).save({ session });
 
-    // 11. Trừ item đã checkout khỏi cart
-    cart.items = cart.items.reduce((arr, i) => {
-      const plain = i.toObject ? i.toObject() : { ...i };
-      const sel = normalizedSelectedItems.find((s) => {
+    // 11) Trừ item đã checkout khỏi cart
+    const nextCartItems = [];
+    for (const item of cart.items) {
+      const plain = item.toObject ? item.toObject() : { ...item };
+      const selected = normalizedSelectedItems.find((s) => {
         if (s.combo_id && plain.combo_id) {
           return String(s.combo_id) === String(plain.combo_id);
         }
@@ -782,30 +843,33 @@ exports.createOrderFromCart = async (userId, orderData) => {
         }
         return false;
       });
-      if (!sel) {
-        arr.push({
+
+      if (!selected) {
+        nextCartItems.push({
           variant_id: plain.variant_id,
           combo_id: plain.combo_id,
           quantity: plain.quantity,
           lens_params: plain.lens_params,
         });
-        return arr;
+        continue;
       }
+
       const requestedQty =
-        sel.quantity !== undefined
-          ? Number(sel.quantity)
+        selected.quantity !== undefined
+          ? Number(selected.quantity)
           : Number(plain.quantity);
       const remain = Number(plain.quantity) - requestedQty;
+
       if (remain > 0) {
-        arr.push({
+        nextCartItems.push({
           variant_id: plain.variant_id,
           combo_id: plain.combo_id,
           quantity: remain,
           lens_params: plain.lens_params,
         });
       }
-      return arr;
-    }, []);
+    }
+    cart.items = nextCartItems;
     cart.updated_at = new Date();
     await cart.save({ session });
 

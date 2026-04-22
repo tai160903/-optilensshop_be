@@ -38,6 +38,7 @@ const cartItemSchema = new Schema(
     combo_price_snapshot: { type: Number },
   },
   {
+    _id: true,
     validate: {
       validator: function () {
         const hasVariant = !!this.variant_id;

@@ -148,6 +148,29 @@ function getOpenApiSpec() {
             note: { type: "string" },
           },
         },
+        CartItemResponse: {
+          type: "object",
+          properties: {
+            _id: { type: "string", description: "Cart line ID" },
+            variant_id: { type: "string", nullable: true },
+            combo_id: { type: "string", nullable: true },
+            quantity: { type: "integer" },
+            lens_params: { $ref: "#/components/schemas/LensParamsBody" },
+            price_snapshot: { type: "number", nullable: true },
+            combo_price_snapshot: { type: "number", nullable: true },
+          },
+        },
+        CartResponse: {
+          type: "object",
+          properties: {
+            success: { type: "boolean", example: true },
+            items: {
+              type: "array",
+              items: { $ref: "#/components/schemas/CartItemResponse" },
+            },
+            totalAmount: { type: "number" },
+          },
+        },
         CheckoutBody: {
           type: "object",
           required: ["shipping_address", "phone", "payment_method"],
@@ -866,7 +889,16 @@ function getOpenApiSpec() {
           tags: ["Cart"],
           security: [{ bearerAuth: [] }],
           summary: "Lấy cart",
-          responses: { 200: { description: "OK" } },
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CartResponse" },
+                },
+              },
+            },
+          },
         },
       },
       "/cart/items": {
@@ -891,23 +923,65 @@ function getOpenApiSpec() {
               },
             },
           },
-          responses: { 200: { description: "OK" } },
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CartResponse" },
+                },
+              },
+            },
+          },
         },
       },
-      "/cart/items/{id}": {
+      "/cart/items/{cartLineId}": {
         put: {
           tags: ["Cart"],
           security: [{ bearerAuth: [] }],
-          summary: "Cập nhật item variant trong cart",
-          parameters: [objectIdParam("id", "Variant ID")],
-          responses: { 200: { description: "OK" } },
+          summary: "Cập nhật item trong cart theo cart line ID",
+          parameters: [objectIdParam("cartLineId", "Cart line ID")],
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    quantity: { type: "integer", minimum: 0 },
+                    lens_params: {
+                      $ref: "#/components/schemas/LensParamsBody",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CartResponse" },
+                },
+              },
+            },
+          },
         },
         delete: {
           tags: ["Cart"],
           security: [{ bearerAuth: [] }],
-          summary: "Xóa item variant khỏi cart",
-          parameters: [objectIdParam("id", "Variant ID")],
-          responses: { 200: { description: "OK" } },
+          summary: "Xóa item trong cart theo cart line ID",
+          parameters: [objectIdParam("cartLineId", "Cart line ID")],
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CartResponse" },
+                },
+              },
+            },
+          },
         },
       },
       "/cart/combo-items/{combo_id}": {
@@ -916,14 +990,32 @@ function getOpenApiSpec() {
           security: [{ bearerAuth: [] }],
           summary: "Cập nhật combo item trong cart",
           parameters: [objectIdParam("combo_id", "Combo ID")],
-          responses: { 200: { description: "OK" } },
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CartResponse" },
+                },
+              },
+            },
+          },
         },
         delete: {
           tags: ["Cart"],
           security: [{ bearerAuth: [] }],
           summary: "Xóa combo item khỏi cart",
           parameters: [objectIdParam("combo_id", "Combo ID")],
-          responses: { 200: { description: "OK" } },
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CartResponse" },
+                },
+              },
+            },
+          },
         },
       },
       "/cart/clear": {
@@ -931,7 +1023,16 @@ function getOpenApiSpec() {
           tags: ["Cart"],
           security: [{ bearerAuth: [] }],
           summary: "Xóa toàn bộ cart",
-          responses: { 200: { description: "OK" } },
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CartResponse" },
+                },
+              },
+            },
+          },
         },
       },
       "/orders": {

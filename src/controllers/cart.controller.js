@@ -1,9 +1,21 @@
 const cartService = require("../services/cart.service");
 
+function buildCartPayload(cart) {
+  const safeCart = cart || { items: [] };
+  const items = safeCart.items || [];
+  const totalAmount = items.reduce((sum, item) => {
+    const unitPrice =
+      Number(item.combo_price_snapshot ?? item.price_snapshot ?? 0) || 0;
+    const qty = Number(item.quantity || 0) || 0;
+    return sum + unitPrice * qty;
+  }, 0);
+  return { success: true, items, totalAmount };
+}
+
 exports.getCart = async (req, res) => {
   try {
     const cart = await cartService.getCartByUser(req.user.id);
-    res.json(cart || { items: [] });
+    res.status(200).json(buildCartPayload(cart));
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -30,7 +42,7 @@ exports.addItem = async (req, res) => {
     } else {
       return res.status(400).json({ message: "Cần variant_id hoặc combo_id" });
     }
-    res.status(200).json({ message: "Thêm vào giỏ thành công", cart });
+    res.status(200).json(buildCartPayload(cart.cart || cart));
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -39,10 +51,10 @@ exports.addItem = async (req, res) => {
 exports.updateItem = async (req, res) => {
   try {
     const { quantity, lens_params } = req.body;
-    const { id: variant_id } = req.params;
-    const cart = await cartService.updateItem(
+    const { cartLineId } = req.params;
+    const cart = await cartService.updateItemByLineId(
       req.user.id,
-      variant_id,
+      cartLineId,
       quantity,
       lens_params,
     );
@@ -50,7 +62,7 @@ exports.updateItem = async (req, res) => {
       return res
         .status(404)
         .json({ message: "Không tìm thấy sản phẩm trong giỏ." });
-    res.status(200).json({ message: "Cập nhật sản phẩm thành công", cart });
+    res.status(200).json(buildCartPayload(cart));
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -58,13 +70,13 @@ exports.updateItem = async (req, res) => {
 
 exports.removeItem = async (req, res) => {
   try {
-    const { id: variant_id } = req.params;
-    const cart = await cartService.removeItem(req.user.id, variant_id);
+    const { cartLineId } = req.params;
+    const cart = await cartService.removeItemByLineId(req.user.id, cartLineId);
     if (!cart)
       return res
         .status(404)
         .json({ message: "Không tìm thấy sản phẩm trong giỏ." });
-    res.status(200).json({ message: "Xóa sản phẩm thành công", cart });
+    res.status(200).json(buildCartPayload(cart));
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -85,9 +97,7 @@ exports.updateComboItem = async (req, res) => {
         .status(404)
         .json({ message: "Không tìm thấy combo trong giỏ." });
     }
-    res
-      .status(200)
-      .json({ message: "Cập nhật combo trong giỏ thành công", cart });
+    res.status(200).json(buildCartPayload(cart));
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -100,7 +110,7 @@ exports.removeComboItem = async (req, res) => {
     if (!cart) {
       return res.status(404).json({ message: "Không tìm thấy giỏ hàng." });
     }
-    res.status(200).json({ message: "Xóa combo khỏi giỏ thành công", cart });
+    res.status(200).json(buildCartPayload(cart));
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -109,7 +119,7 @@ exports.removeComboItem = async (req, res) => {
 exports.clearCart = async (req, res) => {
   try {
     const cart = await cartService.clearCart(req.user.id);
-    res.status(200).json({ message: "Xóa giỏ hàng thành công", cart });
+    res.status(200).json(buildCartPayload(cart));
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
