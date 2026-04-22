@@ -41,6 +41,7 @@ const orderSchema = new Schema(
       enum: ["full", "deposit", "remaining"],
       default: "full",
     },
+    phone: { type: String, required: true, trim: true },
     shipping_address: { type: String, required: true },
     requires_fabrication: { type: Boolean, default: false },
     requires_sales_confirm: { type: Boolean, default: false },

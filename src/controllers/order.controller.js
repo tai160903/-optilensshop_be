@@ -40,6 +40,7 @@ exports.checkout = async (req, res) => {
   try {
     const {
       shipping_address,
+      phone,
       order_type,
       payment_method,
       shipping_method,
@@ -53,6 +54,7 @@ exports.checkout = async (req, res) => {
       req.user.id,
       {
         shipping_address,
+        phone,
         order_type,
         payment_method,
         shipping_method,
@@ -73,6 +75,7 @@ exports.preorderNow = async (req, res) => {
   try {
     const {
       shipping_address,
+      phone,
       payment_method,
       shipping_method,
       items,
@@ -81,6 +84,7 @@ exports.preorderNow = async (req, res) => {
     const { order, payUrl } =
       await orderService.createPreorderDirectWithPayment(req.user.id, {
         shipping_address,
+        phone,
         payment_method,
         shipping_method,
         items,

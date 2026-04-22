@@ -9,6 +9,10 @@ const vnpayService = require("./vnpay.service");
 const { addressToString } = require("../utils/address");
 const { sanitizeLensParams } = require("../utils/lens-params");
 
+function normalizePhone(phone) {
+  return String(phone || "").trim();
+}
+
 exports.checkoutWithPayment = async (userId, orderData) => {
   const order = await exports.createOrderFromCart(userId, orderData);
   let payUrl = null;
@@ -224,6 +228,10 @@ exports.createPreorderDirect = async (userId, orderData) => {
     if (!shippingAddressStr) {
       throw new Error("Thiếu địa chỉ giao hàng");
     }
+    const phone = normalizePhone(orderData.phone);
+    if (!phone) {
+      throw new Error("Thiếu số điện thoại");
+    }
 
     // 4. Tính phí ship và công nợ thanh toán cho preorder
     let shipping_fee = 0;
@@ -277,6 +285,7 @@ exports.createPreorderDirect = async (userId, orderData) => {
       deposit_amount,
       remaining_amount,
       payment_phase,
+      phone,
       shipping_address: shippingAddressStr,
     });
     await order.save({ session });
@@ -596,6 +605,10 @@ exports.createOrderFromCart = async (userId, orderData) => {
     } else {
       shippingAddressStr = orderData.shipping_address || "";
     }
+    const phone = normalizePhone(orderData.phone);
+    if (!phone) {
+      throw new Error("Thiếu số điện thoại");
+    }
 
     // 6. Tính phí ship và payment breakdown
     let shipping_fee = 0;
@@ -659,6 +672,7 @@ exports.createOrderFromCart = async (userId, orderData) => {
       deposit_amount,
       remaining_amount,
       payment_phase,
+      phone,
       shipping_address: shippingAddressStr,
     });
     await order.save({ session });

@@ -139,7 +139,7 @@ function getOpenApiSpec() {
         },
         CheckoutBody: {
           type: "object",
-          required: ["shipping_address", "payment_method"],
+          required: ["shipping_address", "phone", "payment_method"],
           properties: {
             shipping_address: {
               oneOf: [
@@ -155,6 +155,7 @@ function getOpenApiSpec() {
                 },
               ],
             },
+            phone: { type: "string" },
             payment_method: { type: "string", enum: ["cod", "momo", "vnpay"] },
             shipping_method: { type: "string", enum: ["ship", "pickup"] },
             items: {
