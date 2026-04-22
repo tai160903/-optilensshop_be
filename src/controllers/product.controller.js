@@ -28,6 +28,15 @@ async function getProductDetailBySlug(req, res, next) {
   }
 }
 
+async function listVariantsByType(req, res, next) {
+  try {
+    const data = await productService.listVariantsByType(req.query || {});
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function getProductVariants(req, res, next) {
   try {
     const { id } = req.params;
@@ -159,6 +168,7 @@ async function toggleActiveProduct(req, res, next) {
 module.exports = {
   listProducts,
   getProductDetailBySlug,
+  listVariantsByType,
   getProductVariants,
   createProduct,
   addVariant,

@@ -575,6 +575,32 @@ function getOpenApiSpec() {
           responses: { 201: { description: "Created" } },
         },
       },
+      "/variants": {
+        get: {
+          tags: ["Products"],
+          summary: "Danh sách variants theo loại sản phẩm (frame/lens) và tìm kiếm",
+          parameters: [
+            {
+              name: "type",
+              in: "query",
+              required: true,
+              schema: { type: "string", enum: ["frame", "lens", "accessory"] },
+            },
+            { name: "search", in: "query", schema: { type: "string" } },
+            {
+              name: "page",
+              in: "query",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer", default: 12 },
+            },
+          ],
+          responses: { 200: { description: "OK" } },
+        },
+      },
       "/products/{slug}": {
         get: {
           tags: ["Products"],

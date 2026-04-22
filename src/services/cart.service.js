@@ -4,27 +4,24 @@ const Combo = require("../models/combo.schema");
 const mongoose = require("mongoose");
 const { sanitizeLensParams } = require("../utils/lens-params");
 
-function populateCartQuery(query) {
-  return query.populate("items.variant_id").populate({
-    path: "items.combo_id",
-    populate: [
-      {
-        path: "frame_variant_id",
-        populate: { path: "product_id", select: "name slug type" },
-      },
-      {
-        path: "lens_variant_id",
-        populate: { path: "product_id", select: "name slug type" },
-      },
-    ],
-  });
-}
-
 exports.getCartByUser = async (userId) => {
-  let cart = await populateCartQuery(Cart.findOne({ user_id: userId }));
+  let cart = await Cart.findOne({ user_id: userId })
+    .populate("items.variant_id", "name slug type images")
+    .populate({
+      path: "items.combo_id",
+      populate: [
+        {
+          path: "frame_variant_id",
+          populate: { path: "product_id", select: "name slug type images" },
+        },
+        {
+          path: "lens_variant_id",
+          populate: { path: "product_id", select: "name slug type images" },
+        },
+      ],
+    });
   if (!cart) {
-    await Cart.create({ user_id: userId, items: [] });
-    cart = await populateCartQuery(Cart.findOne({ user_id: userId }));
+    cart = await Cart.create({ user_id: userId, items: [] });
   }
   return cart;
 };

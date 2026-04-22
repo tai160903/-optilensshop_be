@@ -10,6 +10,7 @@ router.use("/users", require("./users"));
 router.use("/management", require("./management"));
 router.use("/auth", require("./auth"));
 router.use("/products", require("./products"));
+router.use("/variants", require("./variants"));
 router.use("/combos", require("./combos"));
 router.use("/categories", require("./categories"));
 router.use("/brands", require("./brands"));

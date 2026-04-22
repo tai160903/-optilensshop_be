@@ -161,6 +161,147 @@ async function getProductDetailBySlug(slug) {
   return { product, variants };
 }
 
+/**
+ * Danh sách variants của các sản phẩm đang active theo type (frame/lens/...),
+ * lọc theo tên/slug sản phẩm hoặc SKU variant.
+ */
+async function listVariantsByType(query = {}) {
+  const { type, search, page: pageRaw, limit: limitRaw } = query;
+  if (!type) {
+    throw createHttpError("Thiếu tham số type", 400);
+  }
+  if (!["frame", "lens", "accessory"].includes(type)) {
+    throw createHttpError("type không hợp lệ", 400);
+  }
+
+  const page = toPositiveInt(pageRaw, 1);
+  const limit = toPositiveInt(limitRaw, 12);
+  const skip = (page - 1) * limit;
+
+  const keyword = search != null ? String(search).trim() : "";
+
+  let productIdFilter = null;
+
+  if (keyword) {
+    const [byNameSlug, variantsMatchingSku] = await Promise.all([
+      Product.find({
+        is_active: true,
+        type,
+        $or: [
+          { name: { $regex: keyword, $options: "i" } },
+          { slug: { $regex: keyword, $options: "i" } },
+        ],
+      })
+        .select("_id")
+        .lean(),
+      ProductVariant.find({
+        sku: { $regex: keyword, $options: "i" },
+      })
+        .select("product_id")
+        .lean(),
+    ]);
+
+    const idSet = new Set(byNameSlug.map((p) => p._id.toString()));
+    const skuProductIds = [
+      ...new Set(
+        variantsMatchingSku.map((v) => v.product_id && v.product_id.toString()),
+      ),
+    ].filter(Boolean);
+
+    if (skuProductIds.length > 0) {
+      const skuProducts = await Product.find({
+        _id: { $in: skuProductIds },
+        is_active: true,
+        type,
+      })
+        .select("_id")
+        .lean();
+      skuProducts.forEach((p) => idSet.add(p._id.toString()));
+    }
+
+    const merged = [...idSet];
+    if (merged.length === 0) {
+      return {
+        items: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          total_pages: 1,
+        },
+      };
+    }
+    productIdFilter = merged.map((id) => new mongoose.Types.ObjectId(id));
+  }
+
+  const baseProductMatch = { is_active: true, type };
+  if (productIdFilter) {
+    baseProductMatch._id = { $in: productIdFilter };
+  }
+
+  const products = await Product.find(baseProductMatch).select("_id").lean();
+  const allProductIds = products.map((p) => p._id);
+
+  if (allProductIds.length === 0) {
+    return {
+      items: [],
+      pagination: {
+        page,
+        limit,
+        total: 0,
+        total_pages: 1,
+      },
+    };
+  }
+
+  const variantFilter = { product_id: { $in: allProductIds } };
+
+  const [variants, total] = await Promise.all([
+    ProductVariant.find(variantFilter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({
+        path: "product_id",
+        select: "name slug type images is_active",
+      })
+      .lean(),
+    ProductVariant.countDocuments(variantFilter),
+  ]);
+
+  const items = variants.map((row) => {
+    const populated = row.product_id;
+    const product =
+      populated &&
+      typeof populated === "object" &&
+      populated._id != null
+        ? {
+            _id: populated._id,
+            name: populated.name,
+            slug: populated.slug,
+            type: populated.type,
+            images: populated.images,
+            is_active: populated.is_active,
+          }
+        : null;
+    return {
+      ...row,
+      product_id: populated && populated._id ? populated._id : row.product_id,
+      product,
+    };
+  });
+
+  return {
+    items,
+    pagination: {
+      page,
+      limit,
+      total,
+      total_pages: Math.ceil(total / limit) || 1,
+    },
+  };
+}
+
 async function getProductVariants(productId, query = {}) {
   if (!productId) {
     throw createHttpError("Thiếu productId", 400);
@@ -378,6 +519,7 @@ async function toggleActiveProduct(id, user) {
 module.exports = {
   listProducts,
   getProductDetailBySlug,
+  listVariantsByType,
   getProductVariants,
   createProduct,
   addVariant,
