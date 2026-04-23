@@ -380,7 +380,7 @@ exports.createPreorderDirect = async (userId, orderData) => {
       shippingAddressStr = orderData.shipping_address || "";
     }
 
-    if (!shippingAddressStr) {
+    if (!shippingAddressStr || shippingAddressStr.trim() === "") {
       throw new Error("Thiếu địa chỉ giao hàng");
     }
     const phone = normalizePhone(orderData.phone);
