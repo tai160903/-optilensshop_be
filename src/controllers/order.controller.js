@@ -1,3 +1,5 @@
+const orderService = require("../services/order.service");
+
 exports.getOrderListCustomer = async (req, res) => {
   try {
     const filter = {};
@@ -26,7 +28,7 @@ exports.getOrderListShop = async (req, res) => {
 
 exports.getOrderDetail = async (req, res) => {
   try {
-    const order = await orderService.getOrderDetail(req.params.id, req.user);
+    const order = await orderService.getOrderDetail(req.params.id, req.user.id);
     res.json({ order });
   } catch (err) {
     const statusCode =
@@ -34,7 +36,6 @@ exports.getOrderDetail = async (req, res) => {
     res.status(statusCode).json({ message: err.message });
   }
 };
-const orderService = require("../services/order.service");
 
 exports.checkout = async (req, res) => {
   try {

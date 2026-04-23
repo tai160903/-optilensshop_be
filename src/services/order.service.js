@@ -4,6 +4,8 @@ const OrderItem = require("../models/orderItem.schema");
 const Cart = require("../models/cart.schema");
 const Payment = require("../models/payment.schema");
 const Combo = require("../models/combo.schema");
+const ProductVariant = require("../models/productVariant.schema");
+const PrescriptionOrder = require("../models/prescriptionOrder.schema");
 const momoService = require("./momo.service");
 const vnpayService = require("./vnpay.service");
 const { addressToString } = require("../utils/address");
@@ -12,6 +14,109 @@ const { sanitizeLensParams } = require("../utils/lens-params");
 function normalizePhone(phone) {
   return String(phone || "").trim();
 }
+
+exports.getOrderListCustomer = async (userId, filter = {}) => {
+  const match = { user_id: userId };
+  if (filter.status) match.status = filter.status;
+  const page = filter.page ? parseInt(filter.page) : 1;
+  const pageSize = filter.pageSize ? parseInt(filter.pageSize) : 10;
+  const skip = (page - 1) * pageSize;
+  const total = await Order.countDocuments(match);
+  const orders = await Order.find(match)
+    .sort({ created_at: -1 })
+    .skip(skip)
+    .limit(pageSize);
+  const orderIds = orders.map((o) => o._id);
+  let paymentQuery = { order_id: { $in: orderIds } };
+  if (filter.payment_method) paymentQuery.method = filter.payment_method;
+  if (filter.payment_status) paymentQuery.status = filter.payment_status;
+  const payments = await Payment.find(paymentQuery);
+  const paymentMap = {};
+  payments.forEach((p) => {
+    if (p.status !== "pending-payment") {
+      paymentMap[p.order_id] = p;
+    }
+  });
+  const filteredOrders = orders.filter(
+    (o) =>
+      !paymentMap[o._id] ||
+      (paymentMap[o._id] && paymentMap[o._id].status !== "pending-payment"),
+  );
+  return {
+    data: filteredOrders.map((o) => ({
+      ...o.toObject(),
+      payment: paymentMap[o._id] || null,
+    })),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+};
+
+exports.getOrderListShop = async (filter = {}) => {
+  const match = {};
+  if (filter.status) match.status = filter.status;
+  const page = filter.page ? parseInt(filter.page) : 1;
+  const pageSize = filter.pageSize ? parseInt(filter.pageSize) : 10;
+  const skip = (page - 1) * pageSize;
+  const total = await Order.countDocuments(match);
+  const orders = await Order.find(match)
+    .sort({ created_at: -1 })
+    .skip(skip)
+    .limit(pageSize);
+  const orderIds = orders.map((o) => o._id);
+  let paymentQuery = { order_id: { $in: orderIds } };
+  if (filter.payment_method) paymentQuery.method = filter.payment_method;
+  if (filter.payment_status) paymentQuery.status = filter.payment_status;
+  const payments = await Payment.find(paymentQuery);
+  const paymentMap = {};
+  payments.forEach((p) => {
+    paymentMap[p.order_id] = p;
+  });
+  let filteredOrders = orders;
+  if (filter.payment_method || filter.payment_status) {
+    filteredOrders = orders.filter((o) => paymentMap[o._id]);
+  }
+  return {
+    data: filteredOrders.map((o) => ({
+      ...o.toObject(),
+      payment: paymentMap[o._id] || null,
+    })),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+};
+
+exports.getOrderDetail = async (orderId, userId) => {
+  const order = await Order.findById(orderId);
+  if (!order) throw new AppError("Không tìm thấy đơn hàng", 404);
+
+  if (order.user_id.toString() !== userId.toString()) {
+    throw new AppError("Bạn không có quyền xem đơn hàng này", 403);
+  }
+
+  const [items, payment, prescriptions] = await Promise.all([
+    OrderItem.find({ order_id: orderId }),
+    Payment.findOne({ order_id: orderId }),
+    order.order_type === "prescription"
+      ? PrescriptionOrder.find({ order_id: orderId })
+      : Promise.resolve(null),
+  ]);
+
+  return {
+    ...order.toObject(),
+    items,
+    payment,
+    prescriptions,
+  };
+};
 
 exports.checkoutWithPayment = async (userId, orderData) => {
   const order = await exports.createOrderFromCart(userId, orderData);
@@ -102,8 +207,9 @@ exports.createPreorderDirectWithPayment = async (userId, orderData) => {
           userId,
           "Khởi tạo thanh toán online thất bại",
         );
-      } catch (_) {
-        // no-op: ưu tiên trả lỗi gốc khởi tạo thanh toán
+      } catch (error) {
+        console.log("Error canceling order", error);
+        throw error;
       }
     }
     throw error;
@@ -112,7 +218,6 @@ exports.createPreorderDirectWithPayment = async (userId, orderData) => {
 };
 
 exports.createPreorderDirect = async (userId, orderData) => {
-  const ProductVariant = require("../models/productVariant.schema");
   const session = await mongoose.startSession();
 
   try {
@@ -414,10 +519,7 @@ exports.createPreorderDirect = async (userId, orderData) => {
 };
 
 exports.createOrderFromCart = async (userId, orderData) => {
-  const ProductVariant = require("../models/productVariant.schema");
-  const PrescriptionOrder = require("../models/prescriptionOrder.schema");
   const session = await mongoose.startSession();
-
   try {
     session.startTransaction();
 
@@ -425,17 +527,27 @@ exports.createOrderFromCart = async (userId, orderData) => {
     const cart = await Cart.findOne({ user_id: userId })
       .session(session)
       .populate({
+        path: "items.variant_id",
+        populate: { path: "product_id", select: "-_id name slug type images" },
+      })
+      .populate({
         path: "items.combo_id",
         populate: [
           {
             path: "frame_variant_id",
             select: "stock_quantity reserved_quantity product_id is_active",
-            populate: { path: "product_id", select: "is_active" },
+            populate: {
+              path: "product_id",
+              select: "-_id name slug type images",
+            },
           },
           {
             path: "lens_variant_id",
             select: "stock_quantity reserved_quantity product_id is_active",
-            populate: { path: "product_id", select: "is_active" },
+            populate: {
+              path: "product_id",
+              select: "-_id name slug type images",
+            },
           },
         ],
       });
@@ -658,6 +770,15 @@ exports.createOrderFromCart = async (userId, orderData) => {
     const phone = normalizePhone(orderData.phone);
     if (!phone) {
       throw new Error("Thiếu số điện thoại");
+    }
+
+    const hasShippingAddress =
+      String(shippingAddressStr || "").trim().length > 0;
+    if (
+      !hasShippingAddress &&
+      (order_type === "pre_order" || orderData.shipping_method === "ship")
+    ) {
+      throw new Error("Thiếu địa chỉ giao hàng");
     }
 
     // 6) Tính phí ship và payment breakdown
@@ -1242,113 +1363,4 @@ exports.cancelOrder = async (orderId, userId, reason) => {
 
   await order.save();
   return order;
-};
-
-exports.getOrderListCustomer = async (userId, filter = {}) => {
-  const match = { user_id: userId };
-  if (filter.status) match.status = filter.status;
-  const page = filter.page ? parseInt(filter.page) : 1;
-  const pageSize = filter.pageSize ? parseInt(filter.pageSize) : 10;
-  const skip = (page - 1) * pageSize;
-  const total = await Order.countDocuments(match);
-  const orders = await Order.find(match)
-    .sort({ created_at: -1 })
-    .skip(skip)
-    .limit(pageSize);
-  const orderIds = orders.map((o) => o._id);
-  let paymentQuery = { order_id: { $in: orderIds } };
-  if (filter.payment_method) paymentQuery.method = filter.payment_method;
-  if (filter.payment_status) paymentQuery.status = filter.payment_status;
-  const payments = await Payment.find(paymentQuery);
-  const paymentMap = {};
-  payments.forEach((p) => {
-    if (p.status !== "pending-payment") {
-      paymentMap[p.order_id] = p;
-    }
-  });
-  const filteredOrders = orders.filter(
-    (o) =>
-      !paymentMap[o._id] ||
-      (paymentMap[o._id] && paymentMap[o._id].status !== "pending-payment"),
-  );
-  return {
-    data: filteredOrders.map((o) => ({
-      ...o.toObject(),
-      payment: paymentMap[o._id] || null,
-    })),
-    pagination: {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
-    },
-  };
-};
-
-exports.getOrderListShop = async (filter = {}) => {
-  const match = {};
-  if (filter.status) match.status = filter.status;
-  const page = filter.page ? parseInt(filter.page) : 1;
-  const pageSize = filter.pageSize ? parseInt(filter.pageSize) : 10;
-  const skip = (page - 1) * pageSize;
-  const total = await Order.countDocuments(match);
-  const orders = await Order.find(match)
-    .sort({ created_at: -1 })
-    .skip(skip)
-    .limit(pageSize);
-  const orderIds = orders.map((o) => o._id);
-  let paymentQuery = { order_id: { $in: orderIds } };
-  if (filter.payment_method) paymentQuery.method = filter.payment_method;
-  if (filter.payment_status) paymentQuery.status = filter.payment_status;
-  const payments = await Payment.find(paymentQuery);
-  const paymentMap = {};
-  payments.forEach((p) => {
-    paymentMap[p.order_id] = p;
-  });
-  let filteredOrders = orders;
-  if (filter.payment_method || filter.payment_status) {
-    filteredOrders = orders.filter((o) => paymentMap[o._id]);
-  }
-  return {
-    data: filteredOrders.map((o) => ({
-      ...o.toObject(),
-      payment: paymentMap[o._id] || null,
-    })),
-    pagination: {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
-    },
-  };
-};
-
-exports.getOrderDetail = async (orderId, requester) => {
-  const order = await Order.findById(orderId);
-  if (!order) throw new Error("Không tìm thấy đơn hàng");
-  const requesterId = requester?._id || requester?.id;
-  const requesterRole = requester?.role;
-  const privilegedRoles = ["sales", "manager", "operations", "admin"];
-  const isOwner =
-    requesterId && order.user_id.toString() === requesterId.toString();
-  const canView = isOwner || privilegedRoles.includes(requesterRole);
-  if (!canView) {
-    throw new Error("Bạn không có quyền xem đơn hàng này");
-  }
-  const items = await OrderItem.find({ order_id: orderId });
-  const payment = await Payment.findOne({ order_id: orderId });
-
-  // Nếu là đơn prescription → lấy thông tin đơn thuốc
-  let prescriptions = null;
-  if (order.order_type === "prescription") {
-    const PrescriptionOrder = require("../models/prescriptionOrder.schema");
-    prescriptions = await PrescriptionOrder.find({ order_id: orderId });
-  }
-
-  return {
-    ...order.toObject(),
-    items,
-    payment,
-    prescriptions,
-  };
 };

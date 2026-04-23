@@ -1,0 +1,15 @@
+exports.ORDER_STATUS = {
+  PENDING: "pending",
+  CONFIRMED: "confirmed",
+  PROCESSING: "processing",
+  MANUFACTURING: "manufacturing",
+  PACKED: "packed",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+  RETURN_REQUESTED: "return_requested",
+  RETURNED: "returned",
+  REFUNDED: "refunded",
+  RECEIVED: "received",
+};

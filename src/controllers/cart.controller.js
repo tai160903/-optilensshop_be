@@ -1,21 +1,19 @@
 const cartService = require("../services/cart.service");
 
-function buildCartPayload(cart) {
-  const safeCart = cart || { items: [] };
-  const items = safeCart.items || [];
-  const totalAmount = items.reduce((sum, item) => {
-    const unitPrice =
-      Number(item.combo_price_snapshot ?? item.price_snapshot ?? 0) || 0;
-    const qty = Number(item.quantity || 0) || 0;
-    return sum + unitPrice * qty;
-  }, 0);
-  return { success: true, items, totalAmount };
-}
-
 exports.getCart = async (req, res) => {
   try {
     const cart = await cartService.getCartByUser(req.user.id);
-    res.status(200).json(buildCartPayload(cart));
+    const items = cart?.items || [];
+    const totalAmount = items.reduce((sum, item) => {
+      const unitPrice = Number(
+        item.combo_price_snapshot ?? item.price_snapshot ?? 0,
+      );
+      const qty = Number(item.quantity || 0);
+      return sum + unitPrice * qty;
+    }, 0);
+    res
+      .status(200)
+      .json({ message: "Lấy giỏ hàng thành công", items, totalAmount });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -42,7 +40,17 @@ exports.addItem = async (req, res) => {
     } else {
       return res.status(400).json({ message: "Cần variant_id hoặc combo_id" });
     }
-    res.status(200).json(buildCartPayload(cart.cart || cart));
+    const items = cart?.cart?.items || cart?.items || [];
+    const totalAmount = items.reduce((sum, item) => {
+      const unitPrice = Number(
+        item.combo_price_snapshot ?? item.price_snapshot ?? 0,
+      );
+      const qty = Number(item.quantity || 0);
+      return sum + unitPrice * qty;
+    }, 0);
+    res
+      .status(200)
+      .json({ message: "Lấy giỏ hàng thành công", items, totalAmount });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -62,7 +70,17 @@ exports.updateItem = async (req, res) => {
       return res
         .status(404)
         .json({ message: "Không tìm thấy sản phẩm trong giỏ." });
-    res.status(200).json(buildCartPayload(cart));
+    const items = cart?.items || [];
+    const totalAmount = items.reduce((sum, item) => {
+      const unitPrice = Number(
+        item.combo_price_snapshot ?? item.price_snapshot ?? 0,
+      );
+      const qty = Number(item.quantity || 0);
+      return sum + unitPrice * qty;
+    }, 0);
+    res
+      .status(200)
+      .json({ message: "Lấy giỏ hàng thành công", items, totalAmount });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -76,7 +94,17 @@ exports.removeItem = async (req, res) => {
       return res
         .status(404)
         .json({ message: "Không tìm thấy sản phẩm trong giỏ." });
-    res.status(200).json(buildCartPayload(cart));
+    const items = cart?.items || [];
+    const totalAmount = items.reduce((sum, item) => {
+      const unitPrice = Number(
+        item.combo_price_snapshot ?? item.price_snapshot ?? 0,
+      );
+      const qty = Number(item.quantity || 0);
+      return sum + unitPrice * qty;
+    }, 0);
+    res
+      .status(200)
+      .json({ message: "Lấy giỏ hàng thành công", items, totalAmount });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -97,7 +125,17 @@ exports.updateComboItem = async (req, res) => {
         .status(404)
         .json({ message: "Không tìm thấy combo trong giỏ." });
     }
-    res.status(200).json(buildCartPayload(cart));
+    const items = cart?.items || [];
+    const totalAmount = items.reduce((sum, item) => {
+      const unitPrice = Number(
+        item.combo_price_snapshot ?? item.price_snapshot ?? 0,
+      );
+      const qty = Number(item.quantity || 0);
+      return sum + unitPrice * qty;
+    }, 0);
+    res
+      .status(200)
+      .json({ message: "Lấy giỏ hàng thành công", items, totalAmount });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -110,7 +148,17 @@ exports.removeComboItem = async (req, res) => {
     if (!cart) {
       return res.status(404).json({ message: "Không tìm thấy giỏ hàng." });
     }
-    res.status(200).json(buildCartPayload(cart));
+    const items = cart?.items || [];
+    const totalAmount = items.reduce((sum, item) => {
+      const unitPrice = Number(
+        item.combo_price_snapshot ?? item.price_snapshot ?? 0,
+      );
+      const qty = Number(item.quantity || 0);
+      return sum + unitPrice * qty;
+    }, 0);
+    res
+      .status(200)
+      .json({ message: "Lấy giỏ hàng thành công", items, totalAmount });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -119,7 +167,17 @@ exports.removeComboItem = async (req, res) => {
 exports.clearCart = async (req, res) => {
   try {
     const cart = await cartService.clearCart(req.user.id);
-    res.status(200).json(buildCartPayload(cart));
+    const items = cart?.items || [];
+    const totalAmount = items.reduce((sum, item) => {
+      const unitPrice = Number(
+        item.combo_price_snapshot ?? item.price_snapshot ?? 0,
+      );
+      const qty = Number(item.quantity || 0);
+      return sum + unitPrice * qty;
+    }, 0);
+    res
+      .status(200)
+      .json({ message: "Lấy giỏ hàng thành công", items, totalAmount });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
