@@ -1296,9 +1296,6 @@ exports.confirmOrder = async (orderId, user) => {
   return order;
 };
 
-/**
- * Customer hủy đơn — chỉ pending mới được hủy
- */
 exports.cancelOrder = async (orderId, userId, reason) => {
   const order = await Order.findById(orderId);
   if (!order) throw new Error("Không tìm thấy đơn hàng");

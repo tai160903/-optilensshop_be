@@ -34,6 +34,8 @@ function getOpenApiSpec() {
       { name: "Orders" },
       { name: "Payments" },
       { name: "MoMo" },
+      { name: "VNPay" },
+      { name: "Inventory" },
     ],
     components: {
       securitySchemes: {
@@ -1075,6 +1077,21 @@ function getOpenApiSpec() {
           responses: { 201: { description: "Created" } },
         },
       },
+      "/orders/preorder-now": {
+        post: {
+          tags: ["Orders"],
+          security: [{ bearerAuth: [] }],
+          summary: "Đặt preorder ngay (không qua giỏ hàng)",
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CheckoutBody" },
+              },
+            },
+          },
+          responses: { 201: { description: "Created" } },
+        },
+      },
       "/orders/{id}/confirm": {
         post: {
           tags: ["Orders"],
@@ -1179,6 +1196,51 @@ function getOpenApiSpec() {
         post: {
           tags: ["MoMo"],
           summary: "MoMo IPN",
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/vnpay/create": {
+        post: {
+          tags: ["VNPay"],
+          summary: "Tạo thanh toán VNPay",
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/vnpay/verify": {
+        get: {
+          tags: ["VNPay"],
+          summary: "Xác minh kết quả thanh toán VNPay",
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/inventory/receipts": {
+        get: {
+          tags: ["Inventory"],
+          security: [{ bearerAuth: [] }],
+          summary: "Danh sách phiếu nhập kho",
+          responses: { 200: { description: "OK" } },
+        },
+        post: {
+          tags: ["Inventory"],
+          security: [{ bearerAuth: [] }],
+          summary: "Tạo phiếu nhập kho",
+          responses: { 201: { description: "Created" } },
+        },
+      },
+      "/inventory/receipts/{id}/confirm": {
+        patch: {
+          tags: ["Inventory"],
+          security: [{ bearerAuth: [] }],
+          summary: "Xác nhận phiếu nhập kho",
+          parameters: [objectIdParam("id", "Receipt ID")],
+          responses: { 200: { description: "OK" } },
+        },
+      },
+      "/inventory/ledger": {
+        get: {
+          tags: ["Inventory"],
+          security: [{ bearerAuth: [] }],
+          summary: "Sổ kho (inventory ledger)",
           responses: { 200: { description: "OK" } },
         },
       },
